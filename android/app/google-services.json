@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "432574294952",
+    "project_id": "devtrack-de0ff",
+    "storage_bucket": "devtrack-de0ff.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:432574294952:android:64c249f65dbd49e28bcb9d",
+        "android_client_info": {
+          "package_name": "com.example.devtrack"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "432574294952-ncagdipc1luvcbuqphupmtklnh5t67un.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDgLD5KD8oF8q-eMa_IGGBXgecpIz1ykFY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "432574294952-ncagdipc1luvcbuqphupmtklnh5t67un.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "432574294952-8l9h3er0jcs675sqc626m05psesits6m.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.devtrack"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

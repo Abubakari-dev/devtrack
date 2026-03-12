@@ -1,0 +1,81 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- AUTH HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Check if the user is the owner of the project (checks existing data)
+    function isProjectOwner(projectId) {
+      return isSignedIn() &&
+        get(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+    }
+
+    // Check if the user WILL BE the owner of the project after this write (for batches)
+    function willBeProjectOwner(projectId) {
+      return isSignedIn() &&
+        getAfter(/databases/$(database)/documents/projects/$(projectId)).data.ownerId == request.auth.uid;
+    }
+
+    // --- PROJECTS ---
+    match /projects/{projectId} {
+
+      // Allow creation if the new project belongs to the sender
+      allow create: if isSignedIn() && request.resource.data.ownerId == request.auth.uid;
+
+      // Allow read/update/delete if the current project in DB belongs to user
+      allow read, update, delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      // Nested Roadmap (Phases, Tasks, Subtasks)
+      match /{allPaths=**} {
+        // Read: Check the existing parent project owner
+        allow read: if isProjectOwner(projectId);
+
+        // Write: Check if user is/will be the owner (works for new projects in batches)
+        allow write: if willBeProjectOwner(projectId);
+      }
+    }
+
+    // --- USER DATA ---
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+      
+      match /{allPaths=**} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+    
+    // --- PAYMENTS (Root Collection) ---
+    match /payments/{paymentId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    // --- EXPENSES (Root Collection) ---
+    match /expenses/{expenseId} {
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    // --- SAVINGS (Root Collection) ---
+    match /savings/{savingsId} {
+      // Allow if userId OR the typo serId matches
+      allow create: if isSignedIn() && (request.resource.data.userId == request.auth.uid || request.resource.data.serId == request.auth.uid);
+      allow read, update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.serId == request.auth.uid);
+    }
+    
+    // --- SAVINGS GOAL (Root Collection) ---
+    match /savingsGoals/{userId} {
+      // Document ID is the UID, but we also check inside data for userIduserId typo
+      allow read, write: if isSignedIn() && (request.auth.uid == userId || (resource != null && resource.data.userIduserId == request.auth.uid));
+    }
+    
+    // --- DEFAULT DENY ---
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
