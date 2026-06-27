@@ -235,10 +235,11 @@ class FinanceManager {
 
     final expenseQuery = _db.selectOnly(_db.transactions)
       ..addColumns([_db.transactions.amount.sum()])
-      ..where(_db.transactions.walletId.equals(walletId) & _db.transactions.type.equals('Expense'));
-    final expense = await expenseQuery.map((row) => row.read(_db.transactions.amount.sum())).getSingle() ?? 0;
+      ..where(_db.transactions.walletId.equals(walletId) & 
+             (_db.transactions.type.equals('Expense') | _db.transactions.type.equals('Transfer')));
+    final outGoing = await expenseQuery.map((row) => row.read(_db.transactions.amount.sum())).getSingle() ?? 0;
 
-    // 2. Transfers (Money moving between wallets)
+    // 2. Transfers (Money moving between wallets using the dedicated Transfers table)
     final transferOutQuery = _db.selectOnly(_db.transfers)
       ..addColumns([_db.transfers.amount.sum(), _db.transfers.fee.sum()])
       ..where(_db.transfers.fromWalletId.equals(walletId));
@@ -251,11 +252,17 @@ class FinanceManager {
       ..where(_db.transfers.toWalletId.equals(walletId));
     final transferIn = await transferInQuery.map((row) => row.read(_db.transfers.amount.sum())).getSingle() ?? 0;
 
-    // 3. Debt Payments (if not already covered by transactions)
-    // Note: In our current logic, recordPayment in DebtRepository ALREADY creates a Transaction.
-    // So we don't double-count them here.
+    final newBalance = (income - outGoing - transferOut + transferIn).toInt();
 
-    final newBalance = (income - expense - transferOut + transferIn).toInt();
+    await (_db.update(_db.wallets)..where((w) => w.id.equals(walletId)))
+        .write(WalletsCompanion(balance: Value(newBalance)));
+    
+    // Also sync wallet balance to cloud
+    await _cloudRepo.saveWallet({
+      'id': walletId,
+      'balance': newBalance,
+    });
+  }
 
     await (_db.update(_db.wallets)..where((w) => w.id.equals(walletId)))
         .write(WalletsCompanion(balance: Value(newBalance)));
