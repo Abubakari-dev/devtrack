@@ -1,9 +1,9 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import '../services/enhanced_notification_service.dart';
+import '../services/notification_service.dart';
 
 /// Helper class for checking notification preferences before sending
 class NotificationHelper {
-  static final EnhancedNotificationService _service = EnhancedNotificationService.instance;
+  static final AppNotificationService _service = AppNotificationService.instance;
 
   /// Check if a specific notification category is enabled
   static Future<bool> isNotificationEnabled(String category) async {

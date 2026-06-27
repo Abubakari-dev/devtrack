@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
+import '../../../core/theme/app_text_styles.dart';
 import '../../../core/services/notification_service.dart';
 import '../../projects/models/models.dart';
 import '../widgets/notification_widgets.dart';
@@ -46,7 +46,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   void _onNotificationTap(AppNotification notification) {
     // 1. Mark as read in Firestore
-    NotificationService.instance.markAsRead(notification.id);
+    AppNotificationService.instance.markAsRead(notification.id);
     
     // 2. Handle Deep Linking if projectId exists
     if (notification.projectId != null && notification.projectId!.isNotEmpty) {
@@ -78,7 +78,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         ),
         title: Text(
           'Notifications', 
-          style: AppTextStyles.titleLarge(context).copyWith(
+          style: AppTextStyles.titleLarge.copyWith(
             color: isDark ? Colors.white : AppColors.textPrimary,
             fontWeight: FontWeight.w900,
             fontSize: 20,
@@ -92,7 +92,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               final unreadCount = snapshot.data?.where((n) => !n.isRead).length ?? 0;
               if (unreadCount == 0) return const SizedBox.shrink();
               return TextButton(
-                onPressed: () => NotificationService.instance.markAllAsRead(),
+                onPressed: () => AppNotificationService.instance.markAllAsRead(),
                 child: const Text(
                   'Mark All Read',
                   style: TextStyle(
@@ -224,13 +224,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           Container(
             padding: const EdgeInsets.all(32),
             decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.05) : AppColors.surface,
+              color: isDark ? Colors.white.withValues(alpha: 0.05) : AppColors.surface,
               shape: BoxShape.circle,
             ),
             child: Icon(
               Icons.notifications_none_rounded, 
               size: 64, 
-              color: isDark ? Colors.white12 : AppColors.textMuted.withOpacity(0.3),
+              color: isDark ? Colors.white12 : AppColors.textMuted.withValues(alpha: 0.3),
             ),
           ),
           const SizedBox(height: 24),

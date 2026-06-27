@@ -3,8 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
 class AuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+  FirebaseAuth get _auth => FirebaseAuth.instance;
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
   // Auth State Changes
   Stream<User?> get user => _auth.authStateChanges();
@@ -27,6 +27,7 @@ class AuthService {
     required String email, 
     required String password, 
     required String name,
+    required String phoneNumber,
   }) async {
     try {
       final credential = await _auth.createUserWithEmailAndPassword(
@@ -38,6 +39,7 @@ class AuthService {
         await _firestore.collection('users').doc(credential.user!.uid).set({
           'name': name,
           'email': email,
+          'phoneNumber': phoneNumber,
           'biometricsEnabled': false,
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),
@@ -54,6 +56,7 @@ class AuthService {
         await _firestore.collection('users').doc(user.uid).set({
           'name': name,
           'email': email,
+          'phoneNumber': phoneNumber,
           'biometricsEnabled': false,
           'createdAt': FieldValue.serverTimestamp(),
           'updatedAt': FieldValue.serverTimestamp(),

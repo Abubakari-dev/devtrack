@@ -50,7 +50,7 @@ class CategoryBar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(4),
                     boxShadow: [
                       BoxShadow(
-                        color: color.withOpacity(0.3),
+                        color: color.withValues(alpha: 0.3),
                         blurRadius: 4,
                       ),
                     ],
@@ -99,9 +99,9 @@ class InsightCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
         boxShadow: [
-          BoxShadow(color: color.withOpacity(0.08), blurRadius: 12),
+          BoxShadow(color: color.withValues(alpha: 0.08), blurRadius: 12),
         ],
       ),
       child: Column(
@@ -189,8 +189,8 @@ class _LineChartPainter extends CustomPainter {
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
         colors: [
-          AppColors.blue.withOpacity(0.25),
-          AppColors.blue.withOpacity(0.0),
+          AppColors.blue.withValues(alpha: 0.25),
+          AppColors.blue.withValues(alpha: 0.0),
         ],
       ).createShader(Rect.fromLTWH(0, 0, size.width, size.height));
     canvas.drawPath(fillPath, fillPaint);
@@ -228,7 +228,7 @@ class _LineChartPainter extends CustomPainter {
       }
       if (peakPt != null) {
         final glowPaint = Paint()
-          ..color = AppColors.amber.withOpacity(0.3)
+          ..color = AppColors.amber.withValues(alpha: 0.3)
           ..style = PaintingStyle.fill;
         canvas.drawCircle(peakPt, 10, glowPaint);
         final dotPaint = Paint()

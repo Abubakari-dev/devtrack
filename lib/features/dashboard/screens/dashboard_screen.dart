@@ -1,568 +1,434 @@
+import 'dart:math' as math;
+import 'package:intl/intl.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
-import '../../../core/services/project_service.dart';
-import '../../../core/routes/app_router.dart';
-import '../../analytics/screens/analytics_screen.dart';
-import '../../settings/screens/settings_screen.dart';
-import '../../projects/models/models.dart';
-import '../../projects/screens/project_detail_screen.dart';
-import '../../projects/screens/projects_screen.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
-// ─────────────────────────────────────────────
-//  ROOT DASHBOARD
-// ─────────────────────────────────────────────
-class DashboardScreen extends StatefulWidget {
+import '../../finance/providers/finance_providers.dart';
+import '../../finance/domain/models/finance_summary.dart';
+import '../../../../core/utils/currency_formatter.dart';
+import '../../projects/providers/projects_providers.dart';
+import '../../projects/models/models.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
+import '../../../core/localization/app_localizations.dart';
+import '../../../core/widgets/dev_card.dart';
+
+class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
-}
-
-class _DashboardScreenState extends State<DashboardScreen> {
-  int _navIndex = 0;
-
-  void setNavIndex(int index) {
-    if (index != _navIndex) {
-      setState(() => _navIndex = index);
-    }
-  }
-
-  final List<Widget> _screens = const [
-    HomeTab(),
-    ProjectsScreen(),
-    AnalyticsScreen(),
-    SettingsScreen(),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent,
-      statusBarIconBrightness: isDark ? Brightness.light : Brightness.dark,
-    ));
-
-    return PopScope(
-      canPop: false, // Prevent app from closing immediately
-      onPopInvokedWithResult: (didPop, result) {
-        if (didPop) return;
-        
-        // If not on Home tab, go back to Home tab first
-        if (_navIndex != 0) {
-          setState(() => _navIndex = 0);
-        } else {
-          // If already on Home tab, show a system dialog or just do nothing
-          SystemChannels.platform.invokeMethod('SystemNavigator.pop');
-        }
-      },
-      child: Scaffold(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        body: IndexedStack(
-          index: _navIndex,
-          children: _screens,
-        ),
-        bottomNavigationBar: _BottomNav(
-          currentIndex: _navIndex,
-          onTap: setNavIndex,
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  HOME TAB
-// ─────────────────────────────────────────────
-class HomeTab extends StatefulWidget {
-  const HomeTab({super.key});
-
-  @override
-  State<HomeTab> createState() => _HomeTabState();
-}
-
-class _HomeTabState extends State<HomeTab> {
-  @override
-  Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+  Widget build(BuildContext context, WidgetRef ref) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
-      floatingActionButton: const _Fab(),
-      body: SafeArea(
-        child: StreamBuilder<DocumentSnapshot?>(
-          stream: user != null 
-              ? FirebaseFirestore.instance.collection('users').doc(user.uid).snapshots()
-              : Stream.value(null),
-          builder: (context, userSnapshot) {
-            String fullName = 'Developer';
-            if (userSnapshot.hasData && userSnapshot.data?.data() != null) {
-              final data = userSnapshot.data!.data() as Map<String, dynamic>;
-              fullName = data['name'] ?? user?.displayName ?? 'Developer';
-            } else if (user?.displayName != null) {
-              fullName = user!.displayName!;
-            }
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          const _DashboardAppBar(),
+          
+          Consumer(
+            builder: (context, ref, child) {
+              final projectsState = ref.watch(projectsNotifierProvider);
+              final activeProjects = projectsState.allProjects.where((p) => p.status == ProjectStatus.active).toList();
+              final completedCount = projectsState.allProjects.where((p) => p.status == ProjectStatus.completed).length;
+              final overdueCount = projectsState.allProjects.where((p) => p.status == ProjectStatus.overdue).length;
+              final financeAsync = ref.watch(financeSummaryProvider);
 
-            final projectService = ProjectService(uid: user?.uid ?? '');
-
-            return StreamBuilder<List<Project>>(
-              stream: projectService.getProjectsStream(),
-              builder: (context, snapshot) {
-                // Handle errors
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.error_outline_rounded,
-                            size: 64,
-                            color: isDark ? Colors.white24 : Colors.grey[300],
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Unable to load projects',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: isDark ? Colors.white60 : Colors.grey[600],
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Please check your connection',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: isDark ? Colors.white38 : Colors.grey[500],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-
-                final projects = snapshot.data ?? [];
-                
-                // Display all projects EXCEPT completed ones
-                final ongoingProjects = projects.where((p) => 
-                  p.status != ProjectStatus.completed
-                ).toList();
-
-                final completedCount = projects.where((p) => p.status == ProjectStatus.completed).length;
-                final overdueCount = projects.where((p) => p.status == ProjectStatus.overdue).length;
-                
-                final score = _calculateScore(projects, ongoingProjects, overdueCount, completedCount);
-
-                return CustomScrollView(
-                  physics: const BouncingScrollPhysics(),
-                  slivers: [
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                        child: _HeaderCard(fullName: fullName),
-                      ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 24)),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: _OverviewCard(
-                          score: score,
-                          ongoing: ongoingProjects.length,
-                          completed: completedCount,
-                          overdue: overdueCount,
-                          total: projects.length,
-                        ),
-                      ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 36)),
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: _SectionHeader(
-                          title: 'Ongoing Work',
-                          onSeeAll: () => context.findAncestorStateOfType<_DashboardScreenState>()?.setNavIndex(1),
-                        ),
-                      ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 18)),
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      sliver: ongoingProjects.isEmpty 
-                        ? SliverToBoxAdapter(child: _buildEmptyState(isDark))
-                        : SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (ctx, i) => _ProjectCard(project: ongoingProjects[i])
-                                  .animate()
-                                  .fadeIn(duration: 400.ms, delay: (i * 100).ms)
-                                  .slideX(begin: 0.1, end: 0),
-                              childCount: ongoingProjects.length,
-                            ),
-                          ),
-                    ),
-                    const SliverToBoxAdapter(child: SizedBox(height: 120)),
-                  ],
-                );
-              },
-            );
-          },
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(bool isDark) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 60),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: isDark ? Colors.white.withOpacity(0.05) : AppColors.surface,
-                shape: BoxShape.circle,
-              ),
-              child: Icon(Icons.rocket_launch_rounded, size: 48, color: isDark ? Colors.white24 : AppColors.border),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'No active missions', 
-              style: AppTextStyles.h2(context).copyWith(
-                color: isDark ? Colors.white : Colors.black, 
-                fontWeight: FontWeight.w900
-              )
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Everything is clear. Time to start something new!', 
-              textAlign: TextAlign.center,
-              style: AppTextStyles.body(context).copyWith(
-                color: isDark ? Colors.white38 : AppColors.textMuted
-              )
-            ),
-          ],
-        ),
-      ),
-    ).animate().fadeIn(duration: 600.ms).scale(begin: const Offset(0.9, 0.9));
-  }
-
-  int _calculateScore(List<Project> all, List<Project> ongoing, int overdue, int done) {
-    if (all.isEmpty) return 0;
-    double compRate = (done / all.length) * 40;
-    double timeRate = ((all.length - overdue) / all.length) * 40;
-    double progRate = 0;
-    if (ongoing.isNotEmpty) {
-      progRate = (ongoing.fold<double>(0, (s, p) => s + p.progressPercent) / ongoing.length) * 20 * 100;
-    }
-    return (compRate + timeRate + (progRate / 100)).toInt().clamp(0, 100);
-  }
-}
-
-// ─────────────────────────────────────────────
-//  HEADER CARD
-// ─────────────────────────────────────────────
-class _HeaderCard extends StatelessWidget {
-  final String fullName;
-  const _HeaderCard({required this.fullName});
-
-  String _getInitials(String name) {
-    final parts = name.trim().split(' ');
-    if (parts.length >= 2) {
-      return '${parts[0][0].toUpperCase()}${parts[1][0].toUpperCase()}';
-    }
-    return name.isNotEmpty ? name.substring(0, name.length > 1 ? 2 : 1).toUpperCase() : '??';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final firstName = fullName.split(' ')[0];
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: AppColors.indigoGradient,
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.indigo.withOpacity(0.25), 
-            blurRadius: 24, 
-            offset: const Offset(0, 12)
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white.withOpacity(0.3), width: 2),
-            ),
-            child: Center(
-              child: Text(
-                _getInitials(fullName), 
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 18)
-              ),
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Welcome back,', 
-                  style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13, fontWeight: FontWeight.w500)
-                ),
-                Text(
-                  '$firstName!', 
-                  style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26, letterSpacing: -0.5)
-                ),
-              ],
-            ),
-          ),
-          StreamBuilder<QuerySnapshot?>(
-            stream: FirebaseAuth.instance.currentUser != null
-                ? FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(FirebaseAuth.instance.currentUser!.uid)
-                    .collection('notifications')
-                    .where('isRead', isEqualTo: false)
-                    .snapshots()
-                : Stream.value(null),
-            builder: (context, snapshot) {
-              final unreadCount = snapshot.data?.docs.length ?? 0;
-              
-              return GestureDetector(
-                onTap: () => Navigator.pushNamed(context, AppRoutes.notifications),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Icon(
-                        unreadCount > 0 
-                          ? Icons.notifications_active_rounded 
-                          : Icons.notifications_none_rounded, 
-                        color: Colors.white, 
-                        size: 24,
-                      ),
-                    ),
-                    if (unreadCount > 0)
-                      Positioned(
-                        right: -4,
-                        top: -4,
-                        child: Container(
-                          padding: const EdgeInsets.all(4),
-                          constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                          decoration: BoxDecoration(
-                            color: AppColors.rose,
-                            shape: BoxShape.circle,
-                            border: Border.all(color: Colors.white, width: 2),
-                            boxShadow: [
-                              BoxShadow(
-                                color: AppColors.rose.withOpacity(0.4),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: Center(
-                            child: Text(
-                              unreadCount > 9 ? '9+' : '$unreadCount',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w900,
-                                height: 1,
-                              ),
-                            ),
-                          ),
-                        ).animate(onPlay: (controller) => controller.repeat())
-                          .scale(
-                            duration: 1000.ms,
-                            begin: const Offset(1.0, 1.0),
-                            end: const Offset(1.1, 1.1),
-                            curve: Curves.easeInOut,
-                          )
-                          .then()
-                          .scale(
-                            duration: 1000.ms,
-                            begin: const Offset(1.1, 1.1),
-                            end: const Offset(1.0, 1.0),
-                            curve: Curves.easeInOut,
-                          ),
-                      ),
-                  ],
+              return SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                  child: _DashboardStatusCards(
+                    activeCount: activeProjects.length,
+                    completedCount: completedCount,
+                    overdueCount: overdueCount,
+                    isDark: isDark,
+                  ),
                 ),
               );
             },
           ),
+          
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+              child: DevSectionHeader(
+                title: context.tr('active_projects'),
+                overline: context.tr('tracking_progress'),
+                trailing: TextButton(
+                  onPressed: () => context.go('/projects'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Theme.of(context).colorScheme.primary,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  child: Text(context.tr('see_all'), style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800)),
+                ),
+              ),
+            ),
+          ),
+
+          Consumer(
+            builder: (context, ref, child) {
+              final projectsState = ref.watch(projectsNotifierProvider);
+              final activeProjects = projectsState.allProjects.where((p) => p.status == ProjectStatus.active).toList();
+
+              if (activeProjects.isEmpty) {
+                return SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: _EmptyActiveProjects(isDark: isDark),
+                );
+              }
+
+              return SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _ProjectCard(project: activeProjects[index], isDark: isDark),
+                      ).animate().fadeIn(delay: (index * 100).ms).slideY(begin: 0.1, end: 0);
+                    },
+                    childCount: activeProjects.length,
+                  ),
+                ),
+              );
+            },
+          ),
+
+          const SliverToBoxAdapter(child: SizedBox(height: 120)),
         ],
       ),
-    ).animate().fadeIn(duration: 500.ms).slideY(begin: -0.1, end: 0);
+      floatingActionButton: const _DashboardFAB(),
+    );
   }
 }
 
-// ─────────────────────────────────────────────
-//  OVERVIEW CARD
-// ─────────────────────────────────────────────
-class _OverviewCard extends StatelessWidget {
-  final int score, ongoing, completed, overdue, total;
-  const _OverviewCard({
-    required this.score, 
-    required this.ongoing, 
-    required this.completed, 
-    required this.overdue, 
-    required this.total
+class _EmptyActiveProjects extends StatelessWidget {
+  final bool isDark;
+  const _EmptyActiveProjects({required this.isDark});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(
+          Icons.rocket_launch_rounded, 
+          color: Theme.of(context).colorScheme.onSurface.withOpacity(0.05), 
+          size: 80,
+        ),
+        const SizedBox(height: 20),
+        Text(
+          context.tr('no_active_projects'),
+          style: AppTextStyles.bold.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontSize: 16,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          context.tr('start_journey'),
+          style: AppTextStyles.medium.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.5),
+            fontSize: 12,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ── APP BAR ─────────────────────────────────────────────────────────────────
+
+class _DashboardAppBar extends StatelessWidget {
+  const _DashboardAppBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final name = user?.displayName?.split(' ').first ?? 'User';
+    final now = DateTime.now();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return SliverAppBar(
+      expandedHeight: 140,
+      pinned: true,
+      stretch: true,
+      backgroundColor: Theme.of(context).appBarTheme.backgroundColor,
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      actions: [
+        _AppBarAction(
+          icon: Icons.notifications_none_rounded,
+          hasBadge: true,
+          isDark: isDark,
+          onTap: () {
+            HapticFeedback.lightImpact();
+            context.push('/notifications');
+          },
+        ),
+        const SizedBox(width: 12),
+      ],
+      flexibleSpace: FlexibleSpaceBar(
+        centerTitle: false,
+        titlePadding: const EdgeInsets.only(left: 20, bottom: 20),
+        title: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${_getGreeting(context)}, $name',
+              style: AppTextStyles.bold.copyWith(
+                fontSize: 24,
+                letterSpacing: -1,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+            ),
+            Text(
+              DateFormat('EEEE, MMMM dd').format(now),
+              style: AppTextStyles.medium.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                fontSize: 10,
+                letterSpacing: 1,
+              ),
+            ),
+          ],
+        ),
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            if (!isDark)
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                      Colors.transparent,
+                    ],
+                  ),
+                ),
+              ),
+            Positioned(
+              right: -20,
+              top: -20,
+              child: Container(
+                width: 150,
+                height: 150,
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.03),
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getGreeting(BuildContext context) {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return context.tr('good_morning');
+    if (hour < 17) return context.tr('good_afternoon');
+    if (hour < 21) return context.tr('good_evening');
+    return context.tr('good_night');
+  }
+}
+
+class _AppBarAction extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool hasBadge;
+  final bool isDark;
+
+  const _AppBarAction({
+    required this.icon,
+    required this.onTap,
+    required this.isDark,
+    this.hasBadge = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF161B22) : Colors.white,
-        borderRadius: BorderRadius.circular(32),
-        border: Border.all(color: isDark ? const Color(0xFF30363D) : AppColors.borderLight.withOpacity(0.5)),
-        boxShadow: isDark ? [] : [
-          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 20, offset: const Offset(0, 10)),
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          IconButton(
+            onPressed: onTap,
+            icon: Icon(
+              icon, 
+              color: Theme.of(context).colorScheme.onSurface, 
+              size: 24
+            ),
+          ),
+          if (hasBadge)
+            Positioned(
+              right: 14,
+              top: 14,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: AppColors.rose,
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Theme.of(context).scaffoldBackgroundColor, 
+                    width: 1.5
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
-      child: Column(
+    );
+  }
+}
+
+class _DashboardStatusCards extends StatelessWidget {
+  final int activeCount;
+  final int completedCount;
+  final int overdueCount;
+  final bool isDark;
+
+  const _DashboardStatusCards({
+    required this.activeCount,
+    required this.completedCount,
+    required this.overdueCount,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).colorScheme.primary,
+            Theme.of(context).colorScheme.primary.withOpacity(0.8),
+          ],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Theme.of(context).colorScheme.primary.withOpacity(0.2),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Stack(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Positioned(
+            right: -30,
+            bottom: -30,
+            child: Icon(
+              Icons.analytics_outlined,
+              size: 120,
+              color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.05),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              Text(
+                context.tr('mission_roadmap').toUpperCase(),
+                style: AppTextStyles.bold.copyWith(
+                  color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.6),
+                  fontSize: 10,
+                  letterSpacing: 2,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(
-                    'PERFORMANCE SCORE', 
-                    style: TextStyle(
-                      color: isDark ? Colors.white38 : AppColors.textMuted, 
-                      fontSize: 10, 
-                      fontWeight: FontWeight.w900, 
-                      letterSpacing: 1.2
-                    )
+                  _StatusItem(
+                    label: context.tr('status_active'),
+                    count: activeCount,
+                    icon: Icons.rocket_launch_rounded,
+                    color: Theme.of(context).colorScheme.onPrimary,
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Stability Level', 
-                    style: AppTextStyles.h3(context).copyWith(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.w800)
+                  _VerticalDivider(),
+                  _StatusItem(
+                    label: context.tr('status_completed'),
+                    count: completedCount,
+                    icon: Icons.check_circle_rounded,
+                    color: Theme.of(context).colorScheme.onPrimary.withOpacity(0.9),
+                  ),
+                  _VerticalDivider(),
+                  _StatusItem(
+                    label: context.tr('status_overdue'),
+                    count: overdueCount,
+                    icon: Icons.warning_rounded,
+                    color: const Color(0xFFFDA4AF), // Light Rose
                   ),
                 ],
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                decoration: BoxDecoration(
-                  color: (score > 75 ? AppColors.green : score > 40 ? AppColors.amber : AppColors.red).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  '$score%', 
-                  style: TextStyle(
-                    color: score > 75 ? AppColors.green : score > 40 ? AppColors.amber : AppColors.red, 
-                    fontWeight: FontWeight.w900, 
-                    fontSize: 18
-                  )
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _Stat(label: 'Ongoing', value: '$ongoing', color: AppColors.indigo),
-              _Stat(label: 'Done', value: '$completed', color: AppColors.green),
-              _Stat(label: 'Alerts', value: '$overdue', color: AppColors.red),
-              _Stat(label: 'Total', value: '$total', color: isDark ? Colors.white : Colors.black),
             ],
           ),
         ],
       ),
-    ).animate().fadeIn(duration: 600.ms, delay: 100.ms).slideY(begin: 0.1, end: 0);
+    ).animate().fadeIn(duration: 600.ms).slideY(begin: 0.2, end: 0, curve: Curves.easeOutBack);
   }
 }
 
-class _Stat extends StatelessWidget {
-  final String label, value;
+class _StatusItem extends StatelessWidget {
+  final String label;
+  final int count;
+  final IconData icon;
   final Color color;
-  const _Stat({required this.label, required this.value, required this.color});
+
+  const _StatusItem({
+    required this.label,
+    required this.count,
+    required this.icon,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
-        Text(
-          value, 
-          style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 22, letterSpacing: -0.5)
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 18, color: color),
         ),
-        const SizedBox(height: 4),
+        const SizedBox(height: 12),
         Text(
-          label.toUpperCase(), 
-          style: TextStyle(
-            color: isDark ? Colors.white38 : AppColors.textMuted, 
-            fontSize: 9, 
-            fontWeight: FontWeight.w800,
-            letterSpacing: 0.5
-          )
+          count.toString().padLeft(2, '0'),
+          style: AppTextStyles.bold.copyWith(
+            fontSize: 22,
+            color: Colors.white,
+          ),
         ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────
-//  SECTION HEADER
-// ─────────────────────────────────────────────
-class _SectionHeader extends StatelessWidget {
-  final String title;
-  final VoidCallback onSeeAll;
-  const _SectionHeader({required this.title, required this.onSeeAll});
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      crossAxisAlignment: CrossAxisAlignment.end,
-      children: [
+        const SizedBox(height: 2),
         Text(
-          title, 
-          style: AppTextStyles.h2(context).copyWith(
-            color: isDark ? Colors.white : Colors.black, 
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.5
-          )
-        ),
-        GestureDetector(
-          onTap: onSeeAll,
-          child: const Text(
-            'See all projects', 
-            style: TextStyle(
-              color: AppColors.indigo, 
-              fontWeight: FontWeight.w800, 
-              fontSize: 13
-            )
+          label.toUpperCase(),
+          style: AppTextStyles.bold.copyWith(
+            fontSize: 9,
+            letterSpacing: 0.5,
+            color: Colors.white.withOpacity(0.5),
           ),
         ),
       ],
@@ -570,52 +436,80 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  PROJECT CARD
-// ─────────────────────────────────────────────
-class _ProjectCard extends StatelessWidget {
-  final Project project;
-  const _ProjectCard({required this.project});
-
+class _VerticalDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final statusColor = project.statusColor;
-    final progress = project.progressPercent.clamp(0.0, 1.0);
-    
-    return InkWell(
-      onTap: () => Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (_) => ProjectDetailScreen(
-            projectId: project.id,
-            initialProject: project,
-          ),
-        ),
-      ),
-      borderRadius: BorderRadius.circular(28),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF161B22) : Colors.white,
-          borderRadius: BorderRadius.circular(28),
-          border: Border.all(color: isDark ? const Color(0xFF30363D) : AppColors.borderLight.withOpacity(0.5)),
-          boxShadow: isDark ? [] : [
-            BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 8)),
+    return Container(
+      height: 40,
+      width: 1,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [
+            Colors.white.withOpacity(0),
+            Colors.white.withOpacity(0.2),
+            Colors.white.withOpacity(0),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ── PROJECT CARD ────────────────────────────────────────────────────────────
+
+class _ProjectCard extends ConsumerWidget {
+  final Project project;
+  final bool isDark;
+  const _ProjectCard({required this.project, required this.isDark});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final daysRemaining = project.daysRemaining;
+    final isOverdue = daysRemaining < 0;
+
+    return DevCard(
+      padding: EdgeInsets.zero,
+      onTap: () => context.push('/project-detail', extra: project.id),
+      child: Container(
+        padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.all(10),
+                  width: 52,
+                  height: 52,
                   decoration: BoxDecoration(
-                    color: project.projectColor.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(14),
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        project.projectColor.withOpacity(0.4),
+                        project.projectColor,
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.1),
+                      width: 1,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: project.projectColor.withOpacity(0.2),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      )
+                    ],
                   ),
-                  child: Text(project.projectEmoji, style: const TextStyle(fontSize: 22)),
+                  alignment: Alignment.center,
+                  child: Icon(
+                    Icons.layers_rounded, 
+                    color: Colors.white.withOpacity(0.9), 
+                    size: 24
+                  ),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -623,63 +517,96 @@ class _ProjectCard extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        project.name, 
-                        style: TextStyle(
-                          fontWeight: FontWeight.w900, 
-                          fontSize: 16, 
-                          color: isDark ? Colors.white : Colors.black, 
-                          letterSpacing: -0.2
-                        )
+                        project.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.bold.copyWith(
+                          fontSize: 17,
+                          letterSpacing: -0.5,
+                          color: Theme.of(context).colorScheme.onSurface,
+                        ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        project.categoryLabel, 
-                        style: TextStyle(
-                          color: isDark ? Colors.white38 : AppColors.textSecondary, 
-                          fontSize: 12, 
-                          fontWeight: FontWeight.w500
-                        )
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(
+                            isOverdue ? Icons.error_outline_rounded : Icons.calendar_today_rounded,
+                            size: 10,
+                            color: isOverdue ? AppColors.rose : (daysRemaining <= 3 ? AppColors.amber : Theme.of(context).colorScheme.onSurfaceVariant),
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            isOverdue 
+                                ? context.tr('overdue_label') 
+                                : '${daysRemaining.abs()} ${context.tr("days")} ${daysRemaining < 0 ? context.tr("ago") : context.tr("left")}',
+                            style: AppTextStyles.medium.copyWith(
+                              fontSize: 10,
+                              color: isOverdue 
+                                  ? AppColors.rose 
+                                  : (daysRemaining <= 3 ? AppColors.amber : Theme.of(context).colorScheme.onSurfaceVariant),
+                              fontWeight: (isOverdue || daysRemaining <= 3) ? FontWeight.w900 : FontWeight.w500,
+                            ),
+                          ),
+                        ],
                       ),
                     ],
-                  )
+                  ),
                 ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1), 
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: statusColor.withOpacity(0.2)),
-                  ),
-                  child: Text(
-                    project.statusLabel.toUpperCase(), 
-                    style: TextStyle(color: statusColor, fontSize: 9, fontWeight: FontWeight.w900, letterSpacing: 0.5)
-                  ),
+                _StatusBadge(
+                  project: project, 
+                  onStatusChanged: (newStatus) {
+                    HapticFeedback.mediumImpact();
+                    ref.read(projectsNotifierProvider.notifier).updateProjectStatus(project, newStatus);
+                  },
                 ),
               ],
             ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
-                  'Progress', 
-                  style: TextStyle(color: isDark ? Colors.white54 : AppColors.textMuted, fontSize: 12, fontWeight: FontWeight.w700)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      context.tr('progress').toUpperCase(),
+                      style: AppTextStyles.bold.copyWith(
+                        fontSize: 9,
+                        letterSpacing: 1,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${project.displayCompletedTasks}/${project.displayTotalTasks} ${context.tr(project.phases.isNotEmpty ? "modules" : "tasks")}',
+                      style: AppTextStyles.semiBold.copyWith(
+                        fontSize: 12,
+                        color: Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                    ),
+                  ],
                 ),
-                Text(
-                  '${(progress * 100).toInt()}%', 
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black, fontSize: 12, fontWeight: FontWeight.w900)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: project.projectColor.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${(project.progressPercent * 100).toInt()}%',
+                    style: AppTextStyles.bold.copyWith(
+                      fontSize: 13,
+                      color: project.projectColor,
+                    ),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: isDark ? Colors.white.withOpacity(0.05) : AppColors.surface,
-                valueColor: AlwaysStoppedAnimation(project.projectColor),
-                minHeight: 8,
-              ),
+            const SizedBox(height: 12),
+            _ProgressBar(
+              percent: project.progressPercent,
+              color: project.projectColor,
+              isDark: isDark,
             ),
           ],
         ),
@@ -688,74 +615,127 @@ class _ProjectCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────
-//  FAB
-// ─────────────────────────────────────────────
-class _Fab extends StatelessWidget {
-  const _Fab();
+class _StatusBadge extends StatelessWidget {
+  final Project project;
+  final Function(ProjectStatus) onStatusChanged;
+  const _StatusBadge({required this.project, required this.onStatusChanged});
+
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.indigo.withOpacity(0.3), 
-            blurRadius: 15, 
-            offset: const Offset(0, 8)
+    final statusColor = project.statusColor;
+    return PopupMenuButton<ProjectStatus>(
+      onSelected: onStatusChanged,
+      offset: const Offset(0, 40),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: statusColor.withOpacity(0.1), 
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              project.getStatusLabel(context).toUpperCase(), 
+              style: TextStyle(
+                color: statusColor, 
+                fontSize: 9, 
+                fontWeight: FontWeight.w900,
+                letterSpacing: 0.5,
+              )
+            ),
+            const SizedBox(width: 4),
+            Icon(Icons.keyboard_arrow_down_rounded, size: 14, color: statusColor),
+          ],
+        ),
+      ),
+      itemBuilder: (context) => ProjectStatus.values.map((s) {
+        final tempProject = project.copyWith(status: s);
+        return PopupMenuItem(
+          value: s, 
+          child: Text(
+            tempProject.getStatusLabel(context), 
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)
           )
-        ],
-      ),
-      child: FloatingActionButton.extended(
-        heroTag: 'dashboard_fab',
-        onPressed: () => Navigator.of(context).pushNamed(AppRoutes.addEditProject),
-        backgroundColor: AppColors.indigo,
-        elevation: 0,
-        label: const Text('NEW PROJECT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 12, letterSpacing: 1.2)),
-        icon: const Icon(Icons.add_rounded, color: Colors.white, size: 24),
-      ),
-    ).animate().fadeIn(duration: 800.ms, delay: 400.ms).scale(begin: const Offset(0.5, 0.5));
+        );
+      }).toList(),
+    );
   }
 }
 
-// ─────────────────────────────────────────────
-//  BOTTOM NAV
-// ─────────────────────────────────────────────
-class _BottomNav extends StatelessWidget {
-  final int currentIndex;
-  final ValueChanged<int> onTap;
-  const _BottomNav({required this.currentIndex, required this.onTap});
+class _ProgressBar extends StatelessWidget {
+  final double percent;
+  final Color color;
+  final bool isDark;
+  const _ProgressBar({required this.percent, required this.color, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
+      height: 8,
+      width: double.infinity,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF161B22) : Colors.white,
-        border: Border(
-          top: BorderSide(
-            color: isDark ? const Color(0xFF30363D) : AppColors.borderLight.withOpacity(0.5), 
-            width: 1
-          )
-        ),
+        color: isDark ? Colors.white.withOpacity(0.05) : color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(10),
       ),
-      child: BottomNavigationBar(
-        currentIndex: currentIndex,
-        onTap: onTap,
-        type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        selectedItemColor: AppColors.indigo,
-        unselectedItemColor: isDark ? Colors.white24 : Colors.grey.shade400,
-        selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w900, fontSize: 11),
-        unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 11),
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.folder_copy_rounded), label: 'Projects'),
-          BottomNavigationBarItem(icon: Icon(Icons.analytics_rounded), label: 'Analytics'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings_suggest_rounded), label: 'Settings'),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Stack(
+            children: [
+              TweenAnimationBuilder<double>(
+                tween: Tween<double>(begin: 0, end: percent.clamp(0.01, 1.0)),
+                duration: const Duration(milliseconds: 1500),
+                curve: Curves.easeOutExpo,
+                builder: (context, value, child) {
+                  return Container(
+                    width: constraints.maxWidth * value,
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [color, color.withOpacity(0.7)],
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                      boxShadow: [
+                        BoxShadow(
+                          color: color.withOpacity(0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }
 }
+
+class _DashboardFAB extends StatelessWidget {
+  const _DashboardFAB();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: FloatingActionButton(
+        onPressed: () {
+          HapticFeedback.mediumImpact();
+          context.push('/add-project');
+        },
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        elevation: 10,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Icon(
+          Icons.add_rounded, 
+          color: Theme.of(context).colorScheme.onPrimary, 
+          size: 32
+        ),
+      ).animate().scale(delay: 800.ms, curve: Curves.easeOutBack),
+    );
+  }
+}
+

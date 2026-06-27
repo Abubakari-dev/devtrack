@@ -63,7 +63,7 @@ class DashboardHero extends StatelessWidget {
                 streakLabel.toUpperCase(),
                 style: AppTextStyles.labelMono(context).copyWith(
                   fontSize: 10,
-                  color: AppColors.amber.withOpacity(0.7),
+                  color: AppColors.amber.withValues(alpha: 0.7),
                 ),
               ),
             ],

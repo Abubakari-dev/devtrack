@@ -35,7 +35,7 @@ class ProjectNote {
 }
 
 class NotesRepository {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  FirebaseFirestore get _db => FirebaseFirestore.instance;
   final AuthService _authService = AuthService();
 
   String? get _uid => _authService.currentUser?.uid;

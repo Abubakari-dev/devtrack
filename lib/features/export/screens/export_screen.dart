@@ -3,10 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
+import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/common_widgets.dart';
 import '../../../core/services/project_service.dart';
-import '../../projects/models/project_model.dart';
+import '../../projects/models/models.dart';
 import '../widgets/export_widgets.dart';
 
 class ExportScreen extends StatefulWidget {
@@ -89,11 +89,11 @@ class _ExportScreenState extends State<ExportScreen> {
             const SizedBox(height: 24),
             const Icon(Icons.check_circle_rounded, color: AppColors.green, size: 64),
             const SizedBox(height: 16),
-            Text('Export Successful', style: AppTextStyles.headlineMedium(context)),
+            Text('Export Successful', style: AppTextStyles.headlineMedium),
             const SizedBox(height: 8),
             Text(
               'Your file "$fileName" is ready.',
-              style: AppTextStyles.bodyMedium(context),
+              style: AppTextStyles.bodyMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 24),
@@ -104,10 +104,10 @@ class _ExportScreenState extends State<ExportScreen> {
                     onPressed: () => Navigator.pop(context),
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      side: const BorderSide(color: AppColors.border),
+                      side: BorderSide(color: AppColors.border),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    child: Text('Dismiss', style: AppTextStyles.titleLarge(context).copyWith(fontSize: 14)),
+                    child: Text('Dismiss', style: AppTextStyles.titleLarge.copyWith(fontSize: 14)),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -121,7 +121,7 @@ class _ExportScreenState extends State<ExportScreen> {
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                     ),
-                    child: Text('Open File', style: AppTextStyles.titleLarge(context).copyWith(fontSize: 14, color: Colors.white)),
+                    child: Text('Open File', style: AppTextStyles.titleLarge.copyWith(fontSize: 14, color: Colors.white)),
                   ),
                 ),
               ],
@@ -173,10 +173,10 @@ class _ExportScreenState extends State<ExportScreen> {
         elevation: 0,
         scrolledUnderElevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
+          icon: Icon(Icons.arrow_back_ios_new_rounded, color: AppColors.textPrimary, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text('Export & Reports', style: AppTextStyles.titleLarge(context)),
+        title: Text('Export & Reports', style: AppTextStyles.titleLarge),
         centerTitle: true,
       ),
       body: ListView(
@@ -238,9 +238,9 @@ class _ExportScreenState extends State<ExportScreen> {
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: AppColors.amber.withOpacity(0.05),
+              color: AppColors.amber.withValues(alpha: 0.05),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.amber.withOpacity(0.2)),
+              border: Border.all(color: AppColors.amber.withValues(alpha: 0.2)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -250,7 +250,7 @@ class _ExportScreenState extends State<ExportScreen> {
                 Expanded(
                   child: Text(
                     'Exported files are stored locally on your device. Ensure you handle data securely when sharing these files.',
-                    style: AppTextStyles.bodySmall(context).copyWith(color: AppColors.amber, height: 1.5),
+                    style: AppTextStyles.bodySmall.copyWith(color: AppColors.amber, height: 1.5),
                   ),
                 ),
               ],

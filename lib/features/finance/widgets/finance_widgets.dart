@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../projects/models/project_model.dart';
+import '../../projects/models/models.dart';
+
+import 'package:devtrack/core/localization/app_localizations.dart';
 
 class FinanceUtils {
   static String formatCurrency(double amount) {
@@ -50,13 +52,13 @@ class FinanceSummaryCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: isDark 
-            ? [AppColors.indigo.withOpacity(0.8), const Color(0xFF1E293B)]
+            ? [AppColors.indigo.withValues(alpha: 0.8), const Color(0xFF1E293B)]
             : [AppColors.indigo, const Color(0xFF4F46E5)],
         ),
         borderRadius: BorderRadius.circular(36),
         boxShadow: [
           BoxShadow(
-            color: AppColors.indigo.withOpacity(0.3),
+            color: AppColors.indigo.withValues(alpha: 0.3),
             blurRadius: 25,
             offset: const Offset(0, 12),
           )
@@ -74,7 +76,7 @@ class FinanceSummaryCard extends StatelessWidget {
                 width: 150,
                 height: 150,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Colors.white.withValues(alpha: 0.05),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -86,7 +88,7 @@ class FinanceSummaryCard extends StatelessWidget {
                 width: 100,
                 height: 100,
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.03),
+                  color: Colors.white.withValues(alpha: 0.03),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -104,9 +106,9 @@ class FinanceSummaryCard extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'TOTAL REVENUE', 
+                            context.tr('total_revenue'), 
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.6), 
+                              color: Colors.white.withValues(alpha: 0.6), 
                               fontSize: 10, 
                               fontWeight: FontWeight.w900, 
                               letterSpacing: 2
@@ -127,7 +129,7 @@ class FinanceSummaryCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.15), 
+                          color: Colors.white.withValues(alpha: 0.15), 
                           borderRadius: BorderRadius.circular(16)
                         ),
                         child: const Icon(Icons.account_balance_wallet_rounded, color: Colors.white, size: 24),
@@ -138,7 +140,7 @@ class FinanceSummaryCard extends StatelessWidget {
                   Row(
                     children: [
                       _SummaryStat(
-                        label: 'COLLECTED',
+                        label: context.tr('collected'),
                         value: FinanceUtils.formatCompactCurrency(totalReceived),
                         color: Colors.white,
                         isDark: true,
@@ -146,11 +148,11 @@ class FinanceSummaryCard extends StatelessWidget {
                       Container(
                         width: 1, 
                         height: 30, 
-                        color: Colors.white.withOpacity(0.1), 
+                        color: Colors.white.withValues(alpha: 0.1), 
                         margin: const EdgeInsets.symmetric(horizontal: 24)
                       ),
                       _SummaryStat(
-                        label: 'OUTSTANDING',
+                        label: context.tr('outstanding'),
                         value: safeTotalRemaining > 0 
                           ? FinanceUtils.formatCompactCurrency(safeTotalRemaining)
                           : 'TSh 0',
@@ -167,9 +169,9 @@ class FinanceSummaryCard extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'Collection Rate', 
+                            context.tr('collection_rate'), 
                             style: TextStyle(
-                              color: Colors.white.withOpacity(0.7), 
+                              color: Colors.white.withValues(alpha: 0.7), 
                               fontSize: 12, 
                               fontWeight: FontWeight.w700
                             )
@@ -191,7 +193,7 @@ class FinanceSummaryCard extends StatelessWidget {
                             height: 8,
                             width: double.infinity,
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.1),
+                              color: Colors.white.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(4),
                             ),
                           ),
@@ -206,7 +208,7 @@ class FinanceSummaryCard extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(4),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: Colors.white.withOpacity(0.3),
+                                    color: Colors.white.withValues(alpha: 0.3),
                                     blurRadius: 4,
                                     offset: const Offset(0, 0),
                                   )
@@ -245,7 +247,7 @@ class _SummaryStat extends StatelessWidget {
           Text(
             label, 
             style: TextStyle(
-              color: isDark ? Colors.white.withOpacity(0.5) : Colors.grey, 
+              color: isDark ? Colors.white.withValues(alpha: 0.5) : Colors.grey, 
               fontSize: 9, 
               fontWeight: FontWeight.w900, 
               letterSpacing: 1
@@ -297,13 +299,13 @@ class ProjectFinanceCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(28),
         border: Border.all(
           color: isFullyPaid 
-            ? AppColors.emerald.withOpacity(0.3)
-            : (isDark ? const Color(0xFF30363D) : AppColors.borderLight.withOpacity(0.5)),
+            ? AppColors.emerald.withValues(alpha: 0.3)
+            : (isDark ? const Color(0xFF30363D) : AppColors.borderLight.withValues(alpha: 0.5)),
           width: isFullyPaid ? 2 : 1,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
@@ -321,7 +323,7 @@ class ProjectFinanceCard extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: project.projectColor.withOpacity(0.1),
+                        color: project.projectColor.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(16),
                       ),
                       child: Text(
@@ -349,7 +351,7 @@ class ProjectFinanceCard extends StatelessWidget {
                               Icon(Icons.category_outlined, size: 12, color: isDark ? Colors.white38 : AppColors.textMuted),
                               const SizedBox(width: 4),
                               Text(
-                                project.categoryLabel,
+                                project.getCategoryLabel(context),
                                 style: TextStyle(
                                   color: isDark ? Colors.white38 : AppColors.textMuted,
                                   fontSize: 11,
@@ -388,7 +390,7 @@ class ProjectFinanceCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Payment Status',
+                      context.tr('payment_status'),
                       style: TextStyle(
                         color: isDark ? Colors.white54 : AppColors.textMuted,
                         fontSize: 11,
@@ -400,17 +402,17 @@ class ProjectFinanceCard extends StatelessWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AppColors.emerald.withOpacity(0.1),
+                          color: AppColors.emerald.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: AppColors.emerald.withOpacity(0.2)),
+                          border: Border.all(color: AppColors.emerald.withValues(alpha: 0.2)),
                         ),
                         child: Row(
-                          children: const [
-                            Icon(Icons.check_circle_rounded, color: AppColors.emerald, size: 14),
-                            SizedBox(width: 6),
+                          children: [
+                            const Icon(Icons.check_circle_rounded, color: AppColors.emerald, size: 14),
+                            const SizedBox(width: 6),
                             Text(
-                              'FULLY PAID',
-                              style: TextStyle(
+                              context.tr('fully_paid').toUpperCase(),
+                              style: const TextStyle(
                                 color: AppColors.emerald,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w900,
@@ -437,7 +439,7 @@ class ProjectFinanceCard extends StatelessWidget {
                       height: 10,
                       width: double.infinity,
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100,
+                        color: isDark ? Colors.white.withValues(alpha: 0.05) : Colors.grey.shade100,
                         borderRadius: BorderRadius.circular(5),
                       ),
                     ),
@@ -449,13 +451,13 @@ class ProjectFinanceCard extends StatelessWidget {
                           gradient: LinearGradient(
                             colors: [
                               isFullyPaid ? AppColors.emerald : project.projectColor,
-                              isFullyPaid ? AppColors.emerald.withOpacity(0.6) : project.projectColor.withOpacity(0.6),
+                              isFullyPaid ? AppColors.emerald.withValues(alpha: 0.6) : project.projectColor.withValues(alpha: 0.6),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(5),
                           boxShadow: [
                             BoxShadow(
-                              color: (isFullyPaid ? AppColors.emerald : project.projectColor).withOpacity(0.2),
+                              color: (isFullyPaid ? AppColors.emerald : project.projectColor).withValues(alpha: 0.2),
                               blurRadius: 4,
                               offset: const Offset(0, 2),
                             )
@@ -473,29 +475,29 @@ class ProjectFinanceCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: isDark ? Colors.white.withOpacity(0.02) : Colors.grey.shade50,
+              color: isDark ? Colors.white.withValues(alpha: 0.02) : Colors.grey.shade50,
               borderRadius: const BorderRadius.vertical(bottom: Radius.circular(28)),
             ),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 _FinanceItem(
-                  label: 'CONTRACT', 
+                  label: context.tr('contract'), 
                   value: FinanceUtils.formatCompactCurrency(projectTotal), 
                   color: isDark ? Colors.white70 : Colors.black87, 
                   isDark: isDark
                 ),
                 _FinanceItem(
-                  label: 'RECEIVED', 
+                  label: context.tr('received'), 
                   value: FinanceUtils.formatCompactCurrency(actualPaidAmount), 
                   color: AppColors.emerald, 
                   isDark: isDark
                 ),
                 _FinanceItem(
-                  label: hasDue ? 'OUTSTANDING' : 'STATUS', 
+                  label: hasDue ? context.tr('outstanding') : context.tr('status_label'), 
                   value: hasDue 
                     ? FinanceUtils.formatCompactCurrency(remainingAmount)
-                    : 'SETTLED', 
+                    : context.tr('settled'),
                   color: hasDue ? AppColors.rose : AppColors.emerald, 
                   isDark: isDark,
                   alignRight: true,
@@ -530,7 +532,7 @@ class _CardActionIcon extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(10),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.1),
+          color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(12),
         ),
         child: Icon(icon, color: color, size: 18),

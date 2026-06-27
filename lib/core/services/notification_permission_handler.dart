@@ -45,34 +45,26 @@ class NotificationPermissionHandler {
   /// Request Android notification permissions (Android 13+)
   Future<bool> _requestAndroidPermissions() async {
     try {
-      // Request FCM permissions
+      // 1. Request FCM permissions
       final settings = await _fcm.requestPermission(
         alert: true,
         badge: true,
         sound: true,
         provisional: false,
-        criticalAlert: false,
-        announcement: false,
       );
 
-      final granted = settings.authorizationStatus == AuthorizationStatus.authorized;
+      // 2. Request Local Notification Permission (Critical for Android 13+)
+      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
       
-      if (granted) {
-        debugPrint('Android notification permissions granted');
-        
-        // Request exact alarm permission for scheduled notifications
-        if (Platform.isAndroid) {
-          final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-              AndroidFlutterLocalNotificationsPlugin>();
-          
-          final exactAlarmPermission = await androidPlugin?.requestExactAlarmsPermission();
-          debugPrint('Exact alarm permission: $exactAlarmPermission');
-        }
-      } else {
-        debugPrint('Android notification permissions denied');
-      }
+      final bool? grantedLocal = await androidPlugin?.requestNotificationsPermission();
+      
+      // 3. Request exact alarm permission for scheduled notifications
+      final bool? exactAlarmPermission = await androidPlugin?.requestExactAlarmsPermission();
+      
+      debugPrint('Android Permissions: FCM=${settings.authorizationStatus}, Local=$grantedLocal, ExactAlarm=$exactAlarmPermission');
 
-      return granted;
+      return settings.authorizationStatus == AuthorizationStatus.authorized || (grantedLocal ?? false);
     } catch (e) {
       debugPrint('Error requesting Android permissions: $e');
       return false;
@@ -227,6 +219,8 @@ class NotificationPermissionHandler {
   Future<bool> requestOnFirstLaunch(BuildContext context) async {
     final status = await checkPermissionStatus();
     
+    if (!context.mounted) return false;
+
     if (status == NotificationPermissionStatus.notDetermined) {
       return await requestPermissions(
         context: context,

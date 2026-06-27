@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/services/notification_permission_handler.dart';
-import '../../../core/services/enhanced_notification_service.dart';
+import '../../../core/services/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class NotificationSettingsScreen extends StatefulWidget {
+  // Forced refresh
   const NotificationSettingsScreen({super.key});
 
   @override
@@ -14,7 +15,7 @@ class NotificationSettingsScreen extends StatefulWidget {
 
 class _NotificationSettingsScreenState extends State<NotificationSettingsScreen> {
   final _permissionHandler = NotificationPermissionHandler.instance;
-  final _notificationService = EnhancedNotificationService.instance;
+  final _notificationService = AppNotificationService.instance;
   
   bool _isLoading = true;
   NotificationPermissionStatus _permissionStatus = NotificationPermissionStatus.notDetermined;
@@ -73,7 +74,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
+          const SnackBar(
             content: Text('✅ Notifications enabled successfully!'),
             backgroundColor: AppColors.green,
           ),
@@ -367,7 +368,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
+              color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 24),
@@ -399,7 +400,7 @@ class _NotificationSettingsScreenState extends State<NotificationSettingsScreen>
             onChanged: _permissionStatus == NotificationPermissionStatus.granted
                 ? onChanged
                 : null,
-            activeColor: color,
+            activeTrackColor: color,
           ),
         ],
       ),

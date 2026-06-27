@@ -2,24 +2,32 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:drift/drift.dart' show Value;
 import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
-import '../../finance/data/finance_repository.dart';
-import '../data/project_repository.dart';
-import '../models/project_model.dart';
-import 'add_edit_project_screen.dart';
+import '../../../core/theme/app_text_styles.dart';
+import 'package:devtrack/core/database/app_database.dart';
+import 'package:devtrack/features/finance/providers/finance_providers.dart';
+import 'package:devtrack/features/projects/models/models.dart';
+import 'package:devtrack/features/projects/data/project_repository.dart';
+import 'package:devtrack/features/finance/data/finance_repository.dart';
+import 'package:devtrack/features/projects/screens/add_edit_project_screen.dart';
+import '../../../../core/localization/app_localizations.dart';
+import '../../../../core/utils/currency_formatter.dart';
+import '../../../../core/utils/formatters.dart';
 
-class ProjectDetailScreen extends StatefulWidget {
+class ProjectDetailScreen extends ConsumerStatefulWidget {
   final String projectId;
   final Project? initialProject;
   const ProjectDetailScreen({super.key, required this.projectId, this.initialProject});
 
   @override
-  State<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
+  ConsumerState<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
 }
 
-class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
+class _ProjectDetailScreenState extends ConsumerState<ProjectDetailScreen> {
   final ProjectRepository _projectRepo = ProjectRepository();
   final FinanceRepository _financeRepo = FinanceRepository();
   String? _expandedPhaseId;
@@ -62,13 +70,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       builder: (context) => _ModuleAddBottomSheet(
         accentColor: project.projectColor,
         isDark: Theme.of(context).brightness == Brightness.dark,
-        onAdd: (name, description, price) async {
+        onAdd: (name, description) async {
           final newPhase = Phase(
             id: const Uuid().v4(),
             projectId: project.id,
             name: name.toUpperCase(),
             description: description.isEmpty ? null : description,
-            price: price,
+            price: 0,
             startDate: DateTime.now(),
             endDate: DateTime.now().add(const Duration(days: 7)),
             orderIndex: project.phases.length,
@@ -90,12 +98,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       builder: (context) => _TaskAddBottomSheet(
         accentColor: project.projectColor,
         isDark: Theme.of(context).brightness == Brightness.dark,
-        onAdd: (name, price, priority, subtasks) async {
+        onAdd: (name, priority, subtasks) async {
           final newTask = ProjectTask(
             id: const Uuid().v4(),
             phaseId: phase.id,
             name: name.toUpperCase(),
-            price: price,
+            price: 0,
             priority: priority,
             status: TaskStatus.todo,
             startDate: phase.startDate,
@@ -172,15 +180,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              'Delete Project?',
-              style: AppTextStyles.h2(context).copyWith(
-                fontWeight: FontWeight.w900,
+              context.tr('delete_project_q'),
+              style: AppTextStyles.h2.copyWith(
                 fontSize: 22,
               ),
             ),
             const SizedBox(height: 12),
             Text(
-              'Are you sure you want to delete "${project.name}"? This action cannot be undone.',
+              context.tr('delete_warning').replaceFirst('this project', '"${project.name}"'),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: isDark ? Colors.white60 : AppColors.textSecondary,
@@ -203,9 +210,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                         borderRadius: BorderRadius.circular(16),
                       ),
                     ),
-                    child: const Text(
-                      'CANCEL',
-                      style: TextStyle(
+                    child: Text(
+                      context.tr('cancel').toUpperCase(),
+                      style: const TextStyle(
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1,
                       ),
@@ -224,9 +231,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       ),
                       elevation: 0,
                     ),
-                    child: const Text(
-                      'DELETE',
-                      style: TextStyle(
+                    child: Text(
+                      context.tr('delete').toUpperCase(),
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w900,
                         letterSpacing: 1,
@@ -263,7 +270,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
         }
 
         final p = snapshot.data;
-        if (p == null) return const Scaffold(body: Center(child: Text('Project not found')));
+        if (p == null) return Scaffold(body: Center(child: Text(context.tr('project_not_found'))));
         
         _cachedProject = p;
         
@@ -298,6 +305,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                           p: p, 
                           isDark: isDark, 
                           onBudgetTap: () => _showBudgetSheet(p),
+                          financeRepo: _financeRepo,
                         ),
                         const SizedBox(height: 32),
                         Row(
@@ -306,9 +314,9 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                             Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('MISSION ROADMAP', style: TextStyle(color: p.projectColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.5)),
+                                Text(context.tr('mission_roadmap'), style: AppTextStyles.semiBold.copyWith(color: p.projectColor, fontSize: 10, letterSpacing: 1.5)),
                                 const SizedBox(height: 4),
-                                Text('Modules & Progress', style: AppTextStyles.h2(context).copyWith(fontWeight: FontWeight.w900, fontSize: 20)),
+                                Text(context.tr('modules_progress'), style: AppTextStyles.h2.copyWith(fontSize: 20)),
                               ],
                             ),
                             IconButton.filledTonal(
@@ -319,7 +327,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                                 foregroundColor: p.projectColor,
                                 padding: const EdgeInsets.all(8),
                               ),
-                              tooltip: 'Add Module',
+                              tooltip: context.tr('add_module'),
                             ),
                           ],
                         ),
@@ -367,14 +375,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
       leading: const BackButton(color: Colors.white),
       actions: [
         IconButton(
-          onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddEditProjectScreen(projectId: p.id))),
+          onPressed: () => context.push('/edit-project', extra: p.id),
           icon: const Icon(Icons.edit_rounded, color: Colors.white),
-          tooltip: 'Edit Project',
+          tooltip: context.tr('edit_project'),
         ),
         IconButton(
           onPressed: () => _deleteProject(p),
           icon: const Icon(Icons.delete_outline_rounded, color: Colors.white),
-          tooltip: 'Delete Project',
+          tooltip: context.tr('delete_project'),
         ),
         const SizedBox(width: 8),
       ],
@@ -424,7 +432,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                   Text(
                     p.name, 
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 26, letterSpacing: -0.5),
+                    style: AppTextStyles.semiBold.copyWith(color: Colors.white, fontSize: 26, letterSpacing: -0.5),
                   ).animate().fadeIn(delay: 200.ms).slideY(begin: 0.2),
                   const SizedBox(height: 8),
                   Container(
@@ -434,8 +442,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      p.categoryLabel.toUpperCase(), 
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800, fontSize: 10, letterSpacing: 1),
+                      p.getCategoryLabel(context).toUpperCase(), 
+                      style: AppTextStyles.semiBold.copyWith(color: Colors.white, fontSize: 10, letterSpacing: 1),
                     ),
                   ).animate().fadeIn(delay: 400.ms),
                 ],
@@ -451,7 +459,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> {
 class _ModuleAddBottomSheet extends StatefulWidget {
   final Color accentColor;
   final bool isDark;
-  final Function(String, String, double) onAdd;
+  final Function(String, String) onAdd;
 
   const _ModuleAddBottomSheet({required this.accentColor, required this.isDark, required this.onAdd});
 
@@ -462,7 +470,6 @@ class _ModuleAddBottomSheet extends StatefulWidget {
 class _ModuleAddBottomSheetState extends State<_ModuleAddBottomSheet> {
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _priceCtrl = TextEditingController();
   bool _isLoading = false;
 
   void _submit() async {
@@ -471,7 +478,6 @@ class _ModuleAddBottomSheetState extends State<_ModuleAddBottomSheet> {
     await widget.onAdd(
       _nameCtrl.text.trim(),
       _descCtrl.text.trim(),
-      double.tryParse(_priceCtrl.text) ?? 0,
     );
     if (mounted) Navigator.pop(context);
   }
@@ -490,14 +496,12 @@ class _ModuleAddBottomSheetState extends State<_ModuleAddBottomSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(child: Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2)))),
-            Text('NEW MODULE', style: TextStyle(color: widget.accentColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.2)),
-            Text('Roadmap Phase', style: AppTextStyles.h2(context).copyWith(fontWeight: FontWeight.w900, fontSize: 20)),
+            Text(context.tr('new_module'), style: AppTextStyles.semiBold.copyWith(color: widget.accentColor, fontSize: 10, letterSpacing: 1.2)),
+            Text(context.tr('roadmap_phase'), style: AppTextStyles.h2.copyWith(fontSize: 20)),
             const SizedBox(height: 24),
-            _ModernInputDetail(controller: _nameCtrl, hint: 'MODULE NAME', icon: Icons.folder_rounded, accentColor: widget.accentColor),
+            _ModernInputDetail(controller: _nameCtrl, hint: context.tr('module_name'), icon: Icons.folder_rounded, accentColor: widget.accentColor),
             const SizedBox(height: 12),
-            _ModernInputDetail(controller: _descCtrl, hint: 'DESCRIPTION (OPTIONAL)', icon: Icons.description_rounded, accentColor: widget.accentColor),
-            const SizedBox(height: 12),
-            _ModernInputDetail(controller: _priceCtrl, hint: 'BUDGET / PRICE', icon: Icons.payments_rounded, accentColor: widget.accentColor, keyboardType: TextInputType.number),
+            _ModernInputDetail(controller: _descCtrl, hint: context.tr('description_optional'), icon: Icons.description_rounded, accentColor: widget.accentColor),
             const SizedBox(height: 24),
             ElevatedButton(
               onPressed: _isLoading ? null : _submit,
@@ -509,7 +513,7 @@ class _ModuleAddBottomSheetState extends State<_ModuleAddBottomSheet> {
               ),
               child: _isLoading 
                 ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                : const Text('CREATE MODULE', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                : Text(context.tr('create_module'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1)),
             ),
           ],
         ),
@@ -521,7 +525,7 @@ class _ModuleAddBottomSheetState extends State<_ModuleAddBottomSheet> {
 class _TaskAddBottomSheet extends StatefulWidget {
   final Color accentColor;
   final bool isDark;
-  final Function(String, double, TaskPriority, List<Subtask>) onAdd;
+  final Function(String, TaskPriority, List<Subtask>) onAdd;
 
   const _TaskAddBottomSheet({required this.accentColor, required this.isDark, required this.onAdd});
 
@@ -531,7 +535,6 @@ class _TaskAddBottomSheet extends StatefulWidget {
 
 class _TaskAddBottomSheetState extends State<_TaskAddBottomSheet> {
   final _nameCtrl = TextEditingController();
-  final _priceCtrl = TextEditingController();
   final _subtaskCtrl = TextEditingController();
   TaskPriority _priority = TaskPriority.medium;
   final List<Subtask> _subtasks = [];
@@ -542,7 +545,6 @@ class _TaskAddBottomSheetState extends State<_TaskAddBottomSheet> {
     setState(() => _isLoading = true);
     await widget.onAdd(
       _nameCtrl.text.trim(),
-      double.tryParse(_priceCtrl.text) ?? 0,
       _priority,
       _subtasks,
     );
@@ -568,8 +570,8 @@ class _TaskAddBottomSheetState extends State<_TaskAddBottomSheet> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('NEW TASK', style: TextStyle(color: widget.accentColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.2)),
-                  Text('Mission Step', style: AppTextStyles.h2(context).copyWith(fontWeight: FontWeight.w900, fontSize: 20)),
+                  Text(context.tr('new_task'), style: AppTextStyles.semiBold.copyWith(color: widget.accentColor, fontSize: 10, letterSpacing: 1.2)),
+                  Text(context.tr('mission_step'), style: AppTextStyles.h2.copyWith(fontSize: 20)),
                 ],
               ),
               _buildPriorityBadge(),
@@ -580,9 +582,7 @@ class _TaskAddBottomSheetState extends State<_TaskAddBottomSheet> {
             child: ListView(
               physics: const BouncingScrollPhysics(),
               children: [
-                _ModernInputDetail(controller: _nameCtrl, hint: 'TASK NAME', icon: Icons.assignment_rounded, accentColor: widget.accentColor),
-                const SizedBox(height: 12),
-                _ModernInputDetail(controller: _priceCtrl, hint: 'TASK BUDGET (OPTIONAL)', icon: Icons.payments_rounded, keyboardType: TextInputType.number, accentColor: widget.accentColor),
+                _ModernInputDetail(controller: _nameCtrl, hint: context.tr('task_name'), icon: Icons.assignment_rounded, accentColor: widget.accentColor),
                 const SizedBox(height: 24),
                 
                 Row(
@@ -590,12 +590,12 @@ class _TaskAddBottomSheetState extends State<_TaskAddBottomSheet> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(color: widget.accentColor.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(6)),
-                      child: Text('SUBTASKS', style: TextStyle(color: widget.accentColor, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1)),
+                      child: Text(context.tr('subtasks').toUpperCase(), style: TextStyle(color: widget.accentColor, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1)),
                     ),
                     const SizedBox(width: 10),
                     Expanded(child: Divider(color: widget.accentColor.withValues(alpha: 0.05), thickness: 1)),
                     const SizedBox(width: 10),
-                    Text('${_subtasks.length} STEPS', style: TextStyle(color: Colors.grey.shade400, fontSize: 8, fontWeight: FontWeight.w800)),
+                    Text('${_subtasks.length} ${context.tr('steps').toUpperCase()}', style: TextStyle(color: Colors.grey.shade400, fontSize: 8, fontWeight: FontWeight.w800)),
                   ],
                 ),
                 const SizedBox(height: 16),
@@ -614,7 +614,7 @@ class _TaskAddBottomSheetState extends State<_TaskAddBottomSheet> {
                           controller: _subtaskCtrl,
                           style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
                           decoration: InputDecoration(
-                            hintText: 'Add a new subtask...',
+                            hintText: context.tr('add_subtask_hint'),
                             border: InputBorder.none,
                             hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
                           ),
@@ -679,7 +679,7 @@ class _TaskAddBottomSheetState extends State<_TaskAddBottomSheet> {
             ),
             child: _isLoading 
               ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-              : const Text('CONFIRM TASK', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1)),
+              : Text(context.tr('confirm_task'), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900, letterSpacing: 1)),
           ),
         ],
       ),
@@ -702,7 +702,7 @@ class _TaskAddBottomSheetState extends State<_TaskAddBottomSheet> {
   }
 }
 
-class _BudgetBottomSheet extends StatefulWidget {
+class _BudgetBottomSheet extends ConsumerStatefulWidget {
   final Project project;
   final FinanceRepository financeRepo;
   final Function(double total, double advance) onUpdate;
@@ -710,52 +710,80 @@ class _BudgetBottomSheet extends StatefulWidget {
   const _BudgetBottomSheet({required this.project, required this.financeRepo, required this.onUpdate});
 
   @override
-  State<_BudgetBottomSheet> createState() => _BudgetBottomSheetState();
+  ConsumerState<_BudgetBottomSheet> createState() => _BudgetBottomSheetState();
 }
 
-class _BudgetBottomSheetState extends State<_BudgetBottomSheet> {
+class _BudgetBottomSheetState extends ConsumerState<_BudgetBottomSheet> {
   late TextEditingController _totalCtrl;
   final _amountPaidCtrl = TextEditingController();
   final _labelCtrl = TextEditingController();
+  String? _selectedWalletId;
   bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
-    _totalCtrl = TextEditingController(text: widget.project.totalPrice.toString());
+    _totalCtrl = TextEditingController(text: NumberFormat('#,###').format(widget.project.totalPrice / 100.0));
   }
 
   void _submitUpdate() async {
-    final total = double.tryParse(_totalCtrl.text) ?? 0;
+    final doubleAmount = CurrencyInputFormatter.parse(_totalCtrl.text);
+    final total = (doubleAmount * 100).round().toDouble();
     setState(() => _isLoading = true);
     await widget.onUpdate(total, widget.project.advanceAmount);
     if (mounted) setState(() => _isLoading = false);
   }
 
   void _recordPayment() async {
-    final amount = double.tryParse(_amountPaidCtrl.text) ?? 0;
-    if (amount <= 0) return;
+    final amountText = _amountPaidCtrl.text;
+    final doubleAmount = CurrencyInputFormatter.parse(amountText);
+    if (doubleAmount <= 0) return;
+    
+    final scaledAmount = (doubleAmount * 100).round();
+    
+    if (_selectedWalletId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(context.tr('please_select_wallet')), backgroundColor: AppColors.rose),
+      );
+      return;
+    }
     
     setState(() => _isLoading = true);
-    final payment = Payment(
-      id: const Uuid().v4(),
-      projectId: widget.project.id,
-      label: _labelCtrl.text.isEmpty ? 'Down Payment' : _labelCtrl.text,
-      amount: amount,
-      date: DateTime.now(),
-      isReceived: true,
-    );
     
-    await widget.financeRepo.recordPayment(payment);
-    
-    // Also update project advance amount in parent
-    final newAdvance = widget.project.advanceAmount + amount;
-    await widget.onUpdate(double.tryParse(_totalCtrl.text) ?? widget.project.totalPrice, newAdvance);
-    
-    if (mounted) {
-      _amountPaidCtrl.clear();
-      _labelCtrl.clear();
-      setState(() => _isLoading = false);
+    try {
+      final label = _labelCtrl.text.isEmpty ? 'Project Payment' : _labelCtrl.text;
+      
+      // Use FinanceManager to record the transaction
+      // This automatically handles Wallet Balance, Cloud Sync, and Project Sync (Payment record)
+      await ref.read(financeManagerProvider).recordTransaction(
+        amount: scaledAmount.toString(),
+        type: 'Income',
+        walletId: _selectedWalletId!,
+        note: '${widget.project.name}: $label',
+        projectId: widget.project.id,
+        // We can pass a category if we have one, otherwise it defaults to General
+      );
+      
+      // Update project advance amount in parent (UI state)
+      final newAdvance = widget.project.advanceAmount + scaledAmount;
+      final total = (CurrencyInputFormatter.parse(_totalCtrl.text) * 100).round().toDouble();
+      await widget.onUpdate(total, newAdvance);
+      
+      if (mounted) {
+        _amountPaidCtrl.clear();
+        _labelCtrl.clear();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(context.tr('done')), backgroundColor: AppColors.emerald),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: AppColors.rose),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -763,6 +791,7 @@ class _BudgetBottomSheetState extends State<_BudgetBottomSheet> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final accentColor = widget.project.projectColor;
+    final walletsAsync = ref.watch(walletsStreamProvider);
 
     return Container(
       height: MediaQuery.of(context).size.height * 0.85,
@@ -775,32 +804,39 @@ class _BudgetBottomSheetState extends State<_BudgetBottomSheet> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Center(child: Container(width: 40, height: 4, margin: const EdgeInsets.only(bottom: 20), decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(2)))),
-          Text('FINANCIAL OVERVIEW', style: TextStyle(color: accentColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.2)),
-          Text('Budget & Payments', style: AppTextStyles.h2(context).copyWith(fontWeight: FontWeight.w900, fontSize: 20)),
+          Text(context.tr('financial_overview'), style: AppTextStyles.semiBold.copyWith(color: accentColor, fontSize: 10, letterSpacing: 1.2)),
+          Text(context.tr('budget_payments'), style: AppTextStyles.h2.copyWith(fontSize: 20)),
           const SizedBox(height: 24),
           
           _ModernInputDetail(
             controller: _totalCtrl, 
-            hint: 'TOTAL PROJECT BUDGET', 
+            hint: context.tr('total_project_budget'), 
             icon: Icons.payments_rounded, 
             accentColor: accentColor, 
             keyboardType: TextInputType.number,
+            inputFormatters: [CurrencyInputFormatter()],
             onChanged: (v) => _submitUpdate(),
           ),
           
           const SizedBox(height: 24),
           Row(
             children: [
-              Text('PAYMENT HISTORY', style: TextStyle(color: accentColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.2)),
+              Text(context.tr('payment_history'), style: TextStyle(color: accentColor, fontWeight: FontWeight.w900, fontSize: 10, letterSpacing: 1.2)),
               const Spacer(),
-              StreamBuilder<List<Payment>>(
-                stream: widget.financeRepo.getPaymentsForProject(widget.project.id),
-                builder: (context, snapshot) {
-                  final totalPaid = snapshot.data?.fold(0.0, (sum, p) => sum + p.amount) ?? 0.0;
-                  final balance = (double.tryParse(_totalCtrl.text) ?? 0) - totalPaid;
-                  return Text(
-                    'Balance: TSh ${NumberFormat.compact().format(balance)}',
-                    style: TextStyle(color: balance > 0 ? AppColors.rose : AppColors.emerald, fontWeight: FontWeight.w900, fontSize: 10),
+              Consumer(
+                builder: (context, ref, child) {
+                  final summaryAsync = ref.watch(projectFinancialSummaryProvider(widget.project.id));
+                  
+                  return summaryAsync.when(
+                    data: (summary) {
+                      final balance = summary['revenue']! - summary['directCosts']!;
+                      return Text(
+                        '${context.tr('balance')}: TSh ${NumberFormat.compact().format(balance)}',
+                        style: TextStyle(color: balance >= 0 ? AppColors.emerald : AppColors.rose, fontWeight: FontWeight.w900, fontSize: 10),
+                      );
+                    },
+                    loading: () => const SizedBox.shrink(),
+                    error: (_, __) => const SizedBox.shrink(),
                   );
                 },
               ),
@@ -809,48 +845,53 @@ class _BudgetBottomSheetState extends State<_BudgetBottomSheet> {
           const SizedBox(height: 12),
           
           Expanded(
-            child: StreamBuilder<List<Payment>>(
-              stream: widget.financeRepo.getPaymentsForProject(widget.project.id),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
-                final payments = snapshot.data!;
-                if (payments.isEmpty) return Center(child: Text('No payments recorded yet', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)));
+            child: Consumer(
+              builder: (context, ref, child) {
+                final paymentsAsync = ref.watch(projectPaymentsStreamProvider(widget.project.id));
                 
-                return ListView.builder(
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: payments.length,
-                  itemBuilder: (context, index) {
-                    final p = payments[index];
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withValues(alpha: 0.02) : Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey.shade100),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(color: AppColors.emerald.withValues(alpha: 0.1), shape: BoxShape.circle),
-                            child: const Icon(Icons.check_rounded, color: AppColors.emerald, size: 16),
+                return paymentsAsync.when(
+                  data: (payments) {
+                    if (payments.isEmpty) return Center(child: Text(context.tr('no_payments_yet'), style: TextStyle(color: Colors.grey.shade400, fontSize: 12)));
+                    
+                    return ListView.builder(
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: payments.length,
+                      itemBuilder: (context, index) {
+                        final p = payments[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white.withValues(alpha: 0.02) : Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: isDark ? Colors.white.withValues(alpha: 0.04) : Colors.grey.shade100),
                           ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(p.label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
-                                Text(DateFormat('MMM dd, yyyy').format(p.date), style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
-                              ],
-                            ),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(color: AppColors.emerald.withValues(alpha: 0.1), shape: BoxShape.circle),
+                                child: const Icon(Icons.check_rounded, color: AppColors.emerald, size: 16),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(p.label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
+                                    Text(DateFormat('MMM dd, yyyy', Localizations.localeOf(context).toString()).format(p.date), style: TextStyle(color: Colors.grey.shade400, fontSize: 10)),
+                                  ],
+                                ),
+                              ),
+                              Text(CurrencyFormatter.compactScaled((p.amount * 100).toInt()), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.emerald)),
+                            ],
                           ),
-                          Text('TSh ${NumberFormat.compact().format(p.amount)}', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.emerald)),
-                        ],
-                      ),
+                        );
+                      },
                     );
                   },
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (err, _) => Center(child: Text('Error: $err')),
                 );
               },
             ),
@@ -865,11 +906,32 @@ class _BudgetBottomSheetState extends State<_BudgetBottomSheet> {
             ),
             child: Column(
               children: [
-                _ModernInputDetail(controller: _labelCtrl, hint: 'PAYMENT LABEL (E.G. PARTIAL)', icon: Icons.label_rounded, accentColor: accentColor),
+                _ModernInputDetail(controller: _labelCtrl, hint: context.tr('payment_label_hint'), icon: Icons.label_rounded, accentColor: accentColor),
+                const SizedBox(height: 8),
+                walletsAsync.when(
+                  data: (wallets) => DropdownButtonFormField<String>(
+                    value: _selectedWalletId,
+                    isDense: true,
+                    decoration: _buildInputDecoration(isDark, accentColor, context.tr('select_wallet'), Icons.account_balance_wallet_rounded),
+                    items: wallets.map((w) => DropdownMenuItem(value: w.id, child: Text(w.name, style: const TextStyle(fontSize: 13)))).toList(),
+                    onChanged: (v) => setState(() => _selectedWalletId = v),
+                  ),
+                  loading: () => const LinearProgressIndicator(),
+                  error: (_, __) => const SizedBox.shrink(),
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    Expanded(child: _ModernInputDetail(controller: _amountPaidCtrl, hint: 'AMOUNT', icon: Icons.add_card_rounded, accentColor: accentColor, keyboardType: TextInputType.number)),
+                    Expanded(
+                      child: _ModernInputDetail(
+                        controller: _amountPaidCtrl, 
+                        hint: context.tr('amount'), 
+                        icon: Icons.add_card_rounded, 
+                        accentColor: accentColor, 
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [CurrencyInputFormatter()],
+                      ),
+                    ),
                     const SizedBox(width: 8),
                     ElevatedButton(
                       onPressed: _isLoading ? null : _recordPayment,
@@ -890,6 +952,18 @@ class _BudgetBottomSheetState extends State<_BudgetBottomSheet> {
       ),
     );
   }
+
+  InputDecoration _buildInputDecoration(bool isDark, Color accentColor, String hint, IconData icon) {
+    return InputDecoration(
+      hintText: hint, 
+      prefixIcon: Icon(icon, color: accentColor, size: 18), 
+      filled: true, 
+      fillColor: isDark ? const Color(0xFF0D1117) : Colors.white, 
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none), 
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: accentColor, width: 1.5)),
+      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+    );
+  }
 }
 
 class _ModernInputDetail extends StatelessWidget {
@@ -898,9 +972,18 @@ class _ModernInputDetail extends StatelessWidget {
   final IconData icon; 
   final Color accentColor; 
   final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
   final Function(String)? onChanged;
 
-  const _ModernInputDetail({required this.controller, required this.hint, required this.icon, required this.accentColor, this.keyboardType, this.onChanged});
+  const _ModernInputDetail({
+    required this.controller, 
+    required this.hint, 
+    required this.icon, 
+    required this.accentColor, 
+    this.keyboardType, 
+    this.inputFormatters,
+    this.onChanged,
+  });
   
   @override
   Widget build(BuildContext context) {
@@ -908,6 +991,7 @@ class _ModernInputDetail extends StatelessWidget {
     return TextFormField(
       controller: controller, 
       keyboardType: keyboardType, 
+      inputFormatters: inputFormatters,
       onChanged: onChanged,
       style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13), 
       decoration: InputDecoration(
@@ -923,48 +1007,25 @@ class _ModernInputDetail extends StatelessWidget {
   }
 }
 
-class _QuickAddButton extends StatelessWidget {
-  final String label; final IconData icon; final Color color; final VoidCallback onTap; final bool isDark;
-  const _QuickAddButton({required this.label, required this.icon, required this.color, required this.onTap, required this.isDark});
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: 0.2), width: 1.5),
-          color: color.withValues(alpha: 0.04),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(width: 10),
-            Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 11, letterSpacing: 1)),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ProjectHeaderCard extends StatelessWidget {
+class _ProjectHeaderCard extends ConsumerWidget {
   final Project p;
   final bool isDark;
   final VoidCallback onBudgetTap;
+  final FinanceRepository financeRepo;
 
-  const _ProjectHeaderCard({required this.p, required this.isDark, required this.onBudgetTap});
+  const _ProjectHeaderCard({
+    required this.p, 
+    required this.isDark, 
+    required this.onBudgetTap,
+    required this.financeRepo,
+  });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final remaining = p.totalPrice - p.advanceAmount;
     final isFullyPaid = remaining <= 0;
     final isOverdue = remaining > 0 && p.endDate.isBefore(DateTime.now());
+    final paymentsAsync = ref.watch(projectPaymentsStreamProvider(p.id));
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -979,8 +1040,8 @@ class _ProjectHeaderCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _Stat(label: 'MODULES', value: '${p.phases.where((ph) => ph.status == TaskStatus.done).length}/${p.phases.length}', color: p.projectColor, isDark: isDark),
-              _Stat(label: 'STATUS', value: p.statusLabel, color: p.statusColor, isDark: isDark),
+              _Stat(label: context.tr('modules_label'), value: '${p.phases.where((ph) => ph.status == TaskStatus.done).length}/${p.phases.length}', color: p.projectColor, isDark: isDark),
+              _Stat(label: context.tr('status').toUpperCase(), value: p.getStatusLabel(context), color: p.statusColor, isDark: isDark),
               InkWell(
                 onTap: onBudgetTap,
                 borderRadius: BorderRadius.circular(12),
@@ -992,9 +1053,9 @@ class _ProjectHeaderCard extends StatelessWidget {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('BUDGET', style: const TextStyle(color: Colors.grey, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+                          Text(context.tr('budget').toUpperCase(), style: const TextStyle(color: Colors.grey, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
                           const SizedBox(height: 3),
-                          Text('TSh ${NumberFormat.compact().format(p.totalPrice)}', style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.w900, fontSize: 13)),
+                          Text(CurrencyFormatter.formatScaled(p.totalPrice.toInt()), style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.w900, fontSize: 13)),
                           const SizedBox(height: 5),
                           if (isOverdue)
                             Container(
@@ -1004,7 +1065,7 @@ class _ProjectHeaderCard extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                'OVERDUE: TSh ${NumberFormat.compact().format(remaining)}',
+                                '${context.tr('overdue_label')}: ${CurrencyFormatter.compactScaled(remaining.toInt())}',
                                 style: const TextStyle(
                                   color: AppColors.rose,
                                   fontSize: 7,
@@ -1021,7 +1082,7 @@ class _ProjectHeaderCard extends StatelessWidget {
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
-                                'BALANCE: TSh ${NumberFormat.compact().format(remaining)}',
+                                '${context.tr('balance_label')}: ${CurrencyFormatter.compactScaled(remaining.toInt())}',
                                 style: const TextStyle(
                                   color: AppColors.amber,
                                   fontSize: 7,
@@ -1037,9 +1098,9 @@ class _ProjectHeaderCard extends StatelessWidget {
                                 color: AppColors.emerald.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(4),
                               ),
-                              child: const Text(
-                                'FULLY PAID',
-                                style: TextStyle(
+                              child: Text(
+                                context.tr('fully_paid').toUpperCase(),
+                                style: const TextStyle(
                                   color: AppColors.emerald,
                                   fontSize: 7,
                                   fontWeight: FontWeight.w900,
@@ -1059,19 +1120,51 @@ class _ProjectHeaderCard extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Project Completion', style: TextStyle(color: isDark ? Colors.white38 : AppColors.textMuted, fontSize: 11, fontWeight: FontWeight.w800)),
-              Text('${(p.progressPercent * 100).toInt()}%', style: TextStyle(color: p.projectColor, fontSize: 13, fontWeight: FontWeight.w900)),
+              Text(context.tr('work_progress'), style: TextStyle(color: isDark ? Colors.white38 : AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w800)),
+              Text('${(p.progressPercent * 100).toInt()}%', style: TextStyle(color: p.projectColor, fontSize: 11, fontWeight: FontWeight.w900)),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
               value: p.progressPercent,
-              minHeight: 10,
+              minHeight: 6,
               backgroundColor: isDark ? Colors.white.withValues(alpha: 0.05) : AppColors.surface,
               valueColor: AlwaysStoppedAnimation(p.projectColor),
             ),
+          ),
+          const SizedBox(height: 12),
+          // NEW: Payment Progress Bar
+          paymentsAsync.when(
+            data: (payments) {
+              final totalPaid = payments.fold(0.0, (sum, pay) => sum + pay.amount);
+              final payPercent = p.totalPrice == 0 ? 0.0 : (totalPaid / (p.totalPrice / 100.0)).clamp(0.0, 1.0);
+              
+              return Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(context.tr('payment_progress'), style: TextStyle(color: isDark ? Colors.white38 : AppColors.textMuted, fontSize: 10, fontWeight: FontWeight.w800)),
+                      Text('${(payPercent * 100).toInt()}%', style: const TextStyle(color: AppColors.emerald, fontSize: 11, fontWeight: FontWeight.w900)),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: LinearProgressIndicator(
+                      value: payPercent,
+                      minHeight: 6,
+                      backgroundColor: isDark ? Colors.white.withValues(alpha: 0.05) : AppColors.surface,
+                      valueColor: const AlwaysStoppedAnimation(AppColors.emerald),
+                    ),
+                  ),
+                ],
+              );
+            },
+            loading: () => const LinearProgressIndicator(),
+            error: (_, __) => const SizedBox.shrink(),
           ),
         ],
       ),
@@ -1085,9 +1178,9 @@ class _Stat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(label, style: const TextStyle(color: Colors.grey, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 1.2)),
+      Text(label, style: AppTextStyles.semiBold.copyWith(color: Colors.grey, fontSize: 8, letterSpacing: 1.2)),
       const SizedBox(height: 3),
-      Text(value, style: TextStyle(color: isDark ? Colors.white : Colors.black, fontWeight: FontWeight.w900, fontSize: 13)),
+      Text(value, style: AppTextStyles.semiBold.copyWith(color: isDark ? Colors.white : Colors.black, fontSize: 13)),
       const SizedBox(height: 5),
       Container(width: 15, height: 2.5, decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2))),
     ]);
@@ -1188,15 +1281,6 @@ class _PhaseCardState extends State<_PhaseCard> with SingleTickerProviderStateMi
                               doneCount: doneCount,
                               totalTasks: totalTasks,
                             ),
-                            const SizedBox(width: 8),
-                            Text(
-                              '• TSh ${NumberFormat.compact().format(widget.phase.totalPhasePrice)}',
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: widget.isDark ? Colors.white24 : Colors.grey.shade600,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
                           ],
                         ),
                       ],
@@ -1239,7 +1323,7 @@ class _PhaseCardState extends State<_PhaseCard> with SingleTickerProviderStateMi
                   child: _QuickAddButtonSmall(
                     onTap: widget.onAddTask,
                     accentColor: widget.accentColor,
-                    label: 'ADD MISSION STEP',
+                    label: context.tr('add_mission_step'),
                   ),
                 ),
               ],
@@ -1251,7 +1335,7 @@ class _PhaseCardState extends State<_PhaseCard> with SingleTickerProviderStateMi
   }
 
   Widget _buildNoTasks() {
-    return Padding(padding: const EdgeInsets.all(20), child: Text('No steps yet', style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.white12 : Colors.grey.shade400, fontWeight: FontWeight.w600)));
+    return Padding(padding: const EdgeInsets.all(20), child: Text(context.tr('no_steps_yet'), style: TextStyle(fontSize: 11, color: widget.isDark ? Colors.white12 : Colors.grey.shade400, fontWeight: FontWeight.w600)));
   }
 }
 
@@ -1283,7 +1367,7 @@ class _PhaseStatusBadge extends StatelessWidget {
               Icon(_getStatusIcon(s), color: color, size: 14),
               const SizedBox(width: 8),
               Text(
-                _getStatusLabel(s),
+                _getStatusLabel(context, s),
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: isDark ? Colors.white : Colors.black87),
               ),
             ],
@@ -1300,7 +1384,7 @@ class _PhaseStatusBadge extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              status == TaskStatus.todo ? 'PENDING' : (status == TaskStatus.done ? 'DONE' : '$doneCount/$totalTasks'), 
+              status == TaskStatus.todo ? context.tr('pending_label') : (status == TaskStatus.done ? context.tr('done_label').toUpperCase() : '$doneCount/$totalTasks'), 
               style: TextStyle(fontSize: 8, color: statusColor, fontWeight: FontWeight.w900, letterSpacing: 0.3)
             ),
             const SizedBox(width: 1),
@@ -1359,11 +1443,11 @@ IconData _getStatusIcon(TaskStatus status) {
   };
 }
 
-String _getStatusLabel(TaskStatus status) {
+String _getStatusLabel(BuildContext context, TaskStatus status) {
   return switch (status) {
-    TaskStatus.done => 'Done',
-    TaskStatus.inProgress => 'In Progress',
-    TaskStatus.todo => 'To Do',
+    TaskStatus.done => context.tr('done_label'),
+    TaskStatus.inProgress => context.tr('in_progress_label'),
+    TaskStatus.todo => context.tr('todo_label'),
   };
 }
 
@@ -1458,10 +1542,6 @@ class _TaskTile extends StatelessWidget {
                 Row(
                   children: [
                     _PriorityBadgeDetail(priority: task.priority),
-                    if (task.price > 0) ...[
-                      const SizedBox(width: 6),
-                      _PriceBadgeDetail(price: task.price),
-                    ],
                     if (hasSubtasks) ...[
                       const SizedBox(width: 6),
                       Text(
@@ -1518,7 +1598,7 @@ class _TaskStatusDropdownDetail extends StatelessWidget {
               Icon(_getStatusIcon(s), color: color, size: 14),
               const SizedBox(width: 8),
               Text(
-                _getStatusLabel(s),
+                _getStatusLabel(context, s),
                 style: TextStyle(fontWeight: FontWeight.w700, fontSize: 11, color: isDark ? Colors.white : Colors.black87),
               ),
             ],
@@ -1535,7 +1615,7 @@ class _TaskStatusDropdownDetail extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
-              _getStatusLabel(currentStatus).toUpperCase(),
+              _getStatusLabel(context, currentStatus).toUpperCase(),
               style: TextStyle(fontSize: 7.5, color: statusColor, fontWeight: FontWeight.w900),
             ),
             Icon(Icons.arrow_drop_down_rounded, size: 12, color: statusColor),

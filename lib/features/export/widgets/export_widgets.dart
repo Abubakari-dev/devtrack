@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
+import '../../../core/theme/app_text_styles.dart';
 import '../../../core/widgets/shared_widgets.dart';
 
 class ExportOptionCard extends StatelessWidget {
@@ -33,7 +33,7 @@ class ExportOptionCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: color, size: 24),
@@ -43,9 +43,9 @@ class ExportOptionCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(title, style: AppTextStyles.titleLarge(context).copyWith(fontSize: 16)),
+                    Text(title, style: AppTextStyles.titleLarge.copyWith(fontSize: 16)),
                     const SizedBox(height: 2),
-                    Text(description, style: AppTextStyles.bodySmall(context)),
+                    Text(description, style: AppTextStyles.bodySmall),
                   ],
                 ),
               ),
@@ -95,14 +95,14 @@ class ExportStatTile extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             value,
-            style: AppTextStyles.headlineMedium(context).copyWith(
+            style: AppTextStyles.headlineMedium.copyWith(
               fontSize: 20,
               fontWeight: FontWeight.w800,
             ),
           ),
           Text(
             label,
-            style: AppTextStyles.labelMono(context).copyWith(fontSize: 10),
+            style: AppTextStyles.labelMono.copyWith(fontSize: 10),
           ),
         ],
       ),

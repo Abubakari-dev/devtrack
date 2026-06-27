@@ -3,25 +3,33 @@ import 'dart:math' as math;
 import 'dart:ui' as ui;
 import 'package:intl/intl.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/constants/app_text_styles.dart';
+import '../../../core/theme/app_text_styles.dart';
 import '../../projects/data/project_repository.dart';
-import '../../projects/models/project_model.dart';
+import '../../projects/models/models.dart';
 import '../../finance/data/finance_repository.dart';
+import '../../finance/providers/finance_providers.dart';
+import '../../../core/database/app_database.dart';
 
-class AnalyticsScreen extends StatefulWidget {
+import '../../../core/localization/app_localizations.dart';
+
+class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
 
   @override
-  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
+  ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
 
-class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderStateMixin {
+class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen> with TickerProviderStateMixin {
   final ProjectRepository _projectRepo = ProjectRepository();
-  final FinanceRepository _financeRepo = FinanceRepository();
   
   int _periodIndex = 0; // 0: Week, 1: Month, 2: Year
-  final _periods = ['WEEK', 'MONTH', 'YEAR'];
+  List<String> _getPeriods(BuildContext context) => [
+    context.tr('week').toUpperCase(), 
+    context.tr('month').toUpperCase(), 
+    context.tr('year').toUpperCase()
+  ];
   late AnimationController _chartCtrl;
 
   @override
@@ -45,15 +53,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
     return ((completed / projects.length) * 40) + ((onTime / projects.length) * 40) + (avgProgress * 20);
   }
 
-  List<AnalyticsChartData> _generateChartData(List<Project> projects) {
+  List<AnalyticsChartData> _generateChartData(List<Project> projects, BuildContext context) {
     final now = DateTime.now();
     final List<AnalyticsChartData> data = [];
+    final locale = Localizations.localeOf(context).toString();
     switch (_periodIndex) {
       case 0: // Week
         for (int i = 6; i >= 0; i--) {
           final date = now.subtract(Duration(days: i));
           final count = projects.where((p) => p.createdAt.year == date.year && p.createdAt.month == date.month && p.createdAt.day == date.day).length;
-          data.add(AnalyticsChartData(DateFormat('E').format(date)[0], count.toDouble()));
+          data.add(AnalyticsChartData(DateFormat('E', locale).format(date)[0], count.toDouble()));
         }
         break;
       case 1: // Month
@@ -67,7 +76,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
         for (int i = 0; i < 12; i++) {
           final month = i + 1;
           final count = projects.where((p) => p.createdAt.year == now.year && p.createdAt.month == month).length;
-          data.add(AnalyticsChartData(['J','F','M','A','M','J','J','A','S','O','N','D'][i], count.toDouble()));
+          final monthLabel = DateFormat('MMM', locale).format(DateTime(now.year, month, 1))[0];
+          data.add(AnalyticsChartData(monthLabel, count.toDouble()));
         }
         break;
     }
@@ -77,6 +87,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final walletsAsync = ref.watch(walletsStreamProvider);
 
     return Scaffold(
       backgroundColor: isDark ? const Color(0xFF0D1117) : AppColors.bg,
@@ -85,64 +96,272 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
         builder: (context, projectSnapshot) {
           final projects = projectSnapshot.data ?? [];
           final score = _calculateScore(projects);
-          final chartData = _generateChartData(projects);
+          final chartData = _generateChartData(projects, context);
 
-          return StreamBuilder<List<Payment>>(
-            stream: _financeRepo.getAllPayments(),
-            builder: (context, paymentSnapshot) {
-              final allPayments = paymentSnapshot.data ?? [];
-              final totalRevenue = projects.fold(0.0, (sum, p) => sum + p.totalPrice);
-              final totalPaid = allPayments.fold(0.0, (sum, pay) => sum + pay.amount);
+          return Consumer(
+            builder: (context, ref, child) {
+              final globalSummaryAsync = ref.watch(globalFinancialSummaryProvider);
+              final filteredFinanceAsync = ref.watch(filteredFinanceDataProvider);
               
-              double totalRemaining = 0.0;
-              double totalOverdue = 0.0;
-              final now = DateTime.now();
-              for (var project in projects) {
-                final projectPaid = allPayments.where((p) => p.projectId == project.id).fold(0.0, (sum, pay) => sum + pay.amount);
-                final projectRemaining = project.totalPrice - projectPaid;
-                totalRemaining += projectRemaining;
-                if (project.endDate.isBefore(now) && projectRemaining > 0 && project.status != ProjectStatus.completed) {
-                  totalOverdue += projectRemaining;
-                }
-              }
+              return globalSummaryAsync.when(
+                data: (summary) => filteredFinanceAsync.when(
+                  data: (filteredData) => CustomScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    slivers: [
+                      _buildHeader(context, isDark),
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const SizedBox(height: 20),
+                              _buildPeriodSelector(context, isDark),
+                              const SizedBox(height: 24),
+                              _buildScoreSection(context, score, isDark),
+                              const SizedBox(height: 32),
+                              _buildSectionTitle(context.tr('project_velocity'), isDark),
+                              const SizedBox(height: 16),
+                              _buildMainChart(chartData, AppColors.indigo, isDark),
+                              
+                              const SizedBox(height: 32),
+                              _buildSectionTitle(context.tr('operational_pulse'), isDark),
+                              const SizedBox(height: 16),
+                              _buildCompactSummaryGrid(context, projects, isDark),
 
-              return CustomScrollView(
-                physics: const BouncingScrollPhysics(),
-                slivers: [
-                  _buildHeader(context, isDark),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const SizedBox(height: 20),
-                          _buildPeriodSelector(isDark),
-                          const SizedBox(height: 24),
-                          _buildScoreSection(score, isDark),
-                          const SizedBox(height: 32),
-                          _buildSectionTitle('PROJECT VELOCITY', isDark),
-                          const SizedBox(height: 16),
-                          _buildMainChart(chartData, AppColors.indigo, isDark),
-                          const SizedBox(height: 32),
-                          _buildSectionTitle('OPERATIONAL SUMMARY', isDark),
-                          const SizedBox(height: 16),
-                          _buildSummaryGrid(projects, isDark),
-                          const SizedBox(height: 32),
-                          _buildSectionTitle('REVENUE ANALYTICS', isDark),
-                          const SizedBox(height: 16),
-                          _buildFinancialStack(totalRevenue, totalPaid, totalRemaining, totalOverdue, isDark),
-                          const SizedBox(height: 100),
-                        ],
+                              const SizedBox(height: 32),
+                              _buildSectionTitle(context.tr('wallet_distribution'), isDark),
+                              const SizedBox(height: 16),
+                              walletsAsync.when(
+                                data: (wallets) => _buildWalletAnalytics(context, wallets, isDark),
+                                loading: () => const Center(child: CircularProgressIndicator()),
+                                error: (e, _) => Text('Error loading wallets: $e'),
+                              ),
+
+                              const SizedBox(height: 32),
+                              _buildSectionTitle(context.tr('risk_detection'), isDark),
+                              const SizedBox(height: 16),
+                              _buildRiskAnalytics(context, projects, filteredData.allPayments, isDark),
+
+                              const SizedBox(height: 32),
+                              _buildSectionTitle(context.tr('revenue_analytics'), isDark),
+                              const SizedBox(height: 16),
+                              _buildFinancialPulse(
+                                context: context,
+                                summary: summary,
+                                filteredData: filteredData,
+                                isDark: isDark,
+                              ),
+                              const SizedBox(height: 100),
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                  loading: () => const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Center(child: Text('Error: $e')),
+                ),
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (e, _) => Center(child: Text('Error: $e')),
               );
             },
           );
         },
       ),
+    );
+  }
+
+  Widget _buildFinancialPulse({
+    required BuildContext context,
+    required Map<String, double> summary,
+    required FilteredFinanceData filteredData,
+    required bool isDark,
+  }) {
+    return Column(
+      children: [
+        _FinanceCard(
+          label: context.tr('total_revenue'),
+          value: summary['totalRevenue']!,
+          icon: Icons.account_balance_rounded,
+          color: AppColors.indigo,
+          isDark: isDark,
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: _FinanceCard(label: context.tr('collected'), value: filteredData.totalCollected, icon: Icons.check_circle_rounded, color: AppColors.emerald, isDark: isDark, compact: true)),
+            const SizedBox(width: 12),
+            Expanded(child: _FinanceCard(label: context.tr('pending_label'), value: filteredData.pendingRevenue, icon: Icons.hourglass_bottom_rounded, color: AppColors.amber, isDark: isDark, compact: true)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _FinanceCard(
+          label: context.tr('operating_profit'),
+          value: summary['operatingProfit']!,
+          icon: Icons.trending_up_rounded,
+          color: AppColors.emerald,
+          isDark: isDark,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildWalletAnalytics(BuildContext context, List<Wallet> wallets, bool isDark) {
+    if (wallets.isEmpty) return _buildEmptyMetric(isDark, context.tr('no_wallets_found'));
+    
+    final totalBalance = wallets.fold(0, (sum, w) => sum + w.balance);
+    
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF161B22) : Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: isDark ? const Color(0xFF30363D) : AppColors.borderLight.withOpacity(0.5)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(context.tr('total_liquidity'), style: AppTextStyles.semiBold.copyWith(fontSize: 10, color: Colors.grey, letterSpacing: 1.2)),
+                  const SizedBox(height: 4),
+                  Text('TSh ${NumberFormat('#,###').format(totalBalance)}', style: AppTextStyles.bold.copyWith(fontSize: 22)),
+                ],
+              ),
+              const Icon(Icons.account_balance_wallet_rounded, color: AppColors.indigo, size: 32),
+            ],
+          ),
+          const SizedBox(height: 24),
+          ...wallets.take(3).map((w) {
+            final percent = totalBalance > 0 ? w.balance / totalBalance : 0.0;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Column(
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(w.name, style: AppTextStyles.semiBold.copyWith(fontSize: 13)),
+                      Text('TSh ${NumberFormat.compact().format(w.balance)}', style: AppTextStyles.bold.copyWith(fontSize: 13, color: Color(w.color))),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: percent,
+                      backgroundColor: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100,
+                      valueColor: AlwaysStoppedAnimation(Color(w.color)),
+                      minHeight: 4,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRiskAnalytics(BuildContext context, List<Project> projects, List<Payment> allPayments, bool isDark) {
+    final now = DateTime.now();
+    
+    final atRiskProjects = projects.where((p) {
+      if (p.status == ProjectStatus.completed) return false;
+      final daysRemaining = p.endDate.difference(now).inDays;
+      final progress = p.progressPercent;
+      if (daysRemaining < 7 && progress < 0.8) return true;
+      if (p.endDate.isBefore(now)) return true;
+      return false;
+    }).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF161B22) : Colors.white,
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(color: atRiskProjects.isNotEmpty ? AppColors.rose.withOpacity(0.3) : (isDark ? const Color(0xFF30363D) : AppColors.borderLight.withOpacity(0.5))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: atRiskProjects.isNotEmpty ? AppColors.rose.withOpacity(0.1) : AppColors.emerald.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  atRiskProjects.isNotEmpty ? Icons.warning_amber_rounded : Icons.shield_outlined,
+                  color: atRiskProjects.isNotEmpty ? AppColors.rose : AppColors.emerald,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                atRiskProjects.isNotEmpty ? '${atRiskProjects.length} ${context.tr('projects_at_risk')}' : context.tr('system_secure'),
+                style: AppTextStyles.bold.copyWith(
+                  fontSize: 12,
+                  color: atRiskProjects.isNotEmpty ? AppColors.rose : AppColors.emerald,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (atRiskProjects.isEmpty)
+            Text(
+              context.tr('no_risks'),
+              style: const TextStyle(color: Colors.grey, fontSize: 11, height: 1.5),
+            )
+          else
+            ...atRiskProjects.take(2).map((p) {
+              final days = p.endDate.difference(now).inDays;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    Container(width: 4, height: 32, decoration: BoxDecoration(color: AppColors.rose, borderRadius: BorderRadius.circular(2))),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(p.name, style: AppTextStyles.semiBold.copyWith(fontSize: 13)),
+                          Text(
+                            days < 0 
+                              ? context.tr('overdue_by').replaceFirst('{days}', days.abs().toString()) 
+                              : context.tr('days_left').replaceFirst('{days}', days.toString()).replaceFirst('{progress}', (p.progressPercent*100).toInt().toString()),
+                            style: TextStyle(color: AppColors.rose, fontSize: 10, fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyMetric(bool isDark, String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(32),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF161B22) : Colors.white,
+        borderRadius: BorderRadius.circular(28),
+      ),
+      child: Center(child: Text(message, style: const TextStyle(color: Colors.grey))),
     );
   }
 
@@ -157,12 +376,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
         centerTitle: false,
         titlePadding: const EdgeInsets.only(left: 20, bottom: 20),
         title: Text(
-          'Analytics Engine',
-          style: AppTextStyles.h2(context).copyWith(
+          context.tr('analytics_engine'),
+          style: AppTextStyles.h2.copyWith(
             color: Colors.white,
             fontSize: 22,
-            fontWeight: FontWeight.w900,
-            letterSpacing: -0.8,
           ),
         ),
         background: Stack(
@@ -202,7 +419,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildPeriodSelector(bool isDark) {
+  Widget _buildPeriodSelector(BuildContext context, bool isDark) {
+    final periods = _getPeriods(context);
     return Container(
       height: 44,
       padding: const EdgeInsets.all(4),
@@ -213,7 +431,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
         boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))],
       ),
       child: Row(
-        children: _periods.asMap().entries.map((e) {
+        children: periods.asMap().entries.map((e) {
           final isSelected = e.key == _periodIndex;
           return Expanded(
             child: GestureDetector(
@@ -233,9 +451,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
                 alignment: Alignment.center,
                 child: Text(
                   e.value,
-                  style: TextStyle(
+                  style: AppTextStyles.semiBold.copyWith(
                     color: isSelected ? (isDark ? Colors.black : Colors.white) : (isDark ? Colors.white38 : AppColors.textSecondary),
-                    fontWeight: FontWeight.w900,
                     fontSize: 10,
                     letterSpacing: 0.8,
                   ),
@@ -248,7 +465,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildScoreSection(double score, bool isDark) {
+  Widget _buildScoreSection(BuildContext context, double score, bool isDark) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -272,7 +489,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
                   valueColor: const AlwaysStoppedAnimation(AppColors.indigo),
                 ),
               ),
-              Text('${score.round()}%', style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18)),
+              Text('${score.round()}%', style: AppTextStyles.semiBold.copyWith(fontSize: 18)),
             ],
           ),
           const SizedBox(width: 24),
@@ -280,16 +497,16 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('PRODUCTIVITY SCORE', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w900, color: Colors.grey, letterSpacing: 1.2)),
+                Text(context.tr('productivity_score'), style: AppTextStyles.semiBold.copyWith(fontSize: 10, color: Colors.grey, letterSpacing: 1.2)),
                 const SizedBox(height: 6),
                 Text(
-                  score >= 80 ? 'Exceptional Phase' : score >= 60 ? 'Consistent Growth' : 'Developing Speed',
-                  style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 16, letterSpacing: -0.4),
+                  score >= 80 ? context.tr('score_exceptional') : score >= 60 ? context.tr('score_growth') : context.tr('score_developing'),
+                  style: AppTextStyles.semiBold.copyWith(fontSize: 16, letterSpacing: -0.4),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Based on project completion and milestone velocity.',
-                  style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w500),
+                  context.tr('score_desc'),
+                  style: const TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.w500),
                 ),
               ],
             ),
@@ -299,24 +516,21 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildSummaryGrid(List<Project> projects, bool isDark) {
+  Widget _buildCompactSummaryGrid(BuildContext context, List<Project> projects, bool isDark) {
     final completed = projects.where((p) => p.status == ProjectStatus.completed).length;
     final active = projects.where((p) => p.status == ProjectStatus.active).length;
     final onHold = projects.where((p) => p.status == ProjectStatus.onHold).length;
     final overdue = projects.where((p) => p.status == ProjectStatus.overdue).length;
 
-    return GridView.count(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 2,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.6,
+    return Row(
       children: [
-        _MetricTile(label: 'COMPLETED', val: '$completed', color: AppColors.emerald, isDark: isDark),
-        _MetricTile(label: 'ACTIVE', val: '$active', color: AppColors.indigo, isDark: isDark),
-        _MetricTile(label: 'OVERDUE', val: '$overdue', color: AppColors.rose, isDark: isDark),
-        _MetricTile(label: 'ON HOLD', val: '$onHold', color: AppColors.amber, isDark: isDark),
+        Expanded(child: _CompactMetricTile(label: context.tr('metric_done'), val: '$completed', color: AppColors.emerald, isDark: isDark)),
+        const SizedBox(width: 8),
+        Expanded(child: _CompactMetricTile(label: context.tr('metric_live'), val: '$active', color: AppColors.indigo, isDark: isDark)),
+        const SizedBox(width: 8),
+        Expanded(child: _CompactMetricTile(label: context.tr('metric_late'), val: '$overdue', color: AppColors.rose, isDark: isDark)),
+        const SizedBox(width: 8),
+        Expanded(child: _CompactMetricTile(label: context.tr('metric_hold'), val: '$onHold', color: AppColors.amber, isDark: isDark)),
       ],
     );
   }
@@ -341,33 +555,12 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> with TickerProviderSt
     );
   }
 
-  Widget _buildFinancialStack(double revenue, double paid, double remaining, double overdue, bool isDark) {
-    return Column(
-      children: [
-        _FinanceCard(label: 'Contract Total', value: revenue, icon: Icons.account_balance_rounded, color: AppColors.indigo, isDark: isDark),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(child: _FinanceCard(label: 'Collected', value: paid, icon: Icons.check_circle_rounded, color: AppColors.emerald, isDark: isDark, compact: true)),
-            const SizedBox(width: 12),
-            Expanded(child: _FinanceCard(label: 'Pending', value: remaining, icon: Icons.hourglass_bottom_rounded, color: AppColors.amber, isDark: isDark, compact: true)),
-          ],
-        ),
-        if (overdue > 0) ...[
-          const SizedBox(height: 12),
-          _FinanceCard(label: 'Overdue Payments', value: overdue, icon: Icons.warning_amber_rounded, color: AppColors.rose, isDark: isDark),
-        ]
-      ],
-    );
-  }
-
   Widget _buildSectionTitle(String title, bool isDark) {
     return Text(
       title,
-      style: TextStyle(
+      style: AppTextStyles.semiBold.copyWith(
         color: isDark ? Colors.white38 : AppColors.textMuted,
         fontSize: 10,
-        fontWeight: FontWeight.w900,
         letterSpacing: 1.5,
       ),
     );
@@ -380,28 +573,26 @@ class AnalyticsChartData {
   AnalyticsChartData(this.label, this.value);
 }
 
-class _MetricTile extends StatelessWidget {
+class _CompactMetricTile extends StatelessWidget {
   final String label, val;
   final Color color;
   final bool isDark;
-  const _MetricTile({required this.label, required this.val, required this.color, required this.isDark});
+  const _CompactMetricTile({required this.label, required this.val, required this.color, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF161B22) : Colors.white,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: isDark ? const Color(0xFF30363D) : AppColors.borderLight.withOpacity(0.5)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text(val, style: TextStyle(color: color, fontWeight: FontWeight.w900, fontSize: 24, letterSpacing: -1)),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(color: Colors.grey, fontSize: 8, fontWeight: FontWeight.w900, letterSpacing: 0.5)),
+          Text(val, style: AppTextStyles.bold.copyWith(color: color, fontSize: 18, letterSpacing: -0.5)),
+          const SizedBox(height: 2),
+          Text(label, style: AppTextStyles.bold.copyWith(color: Colors.grey, fontSize: 8)),
         ],
       ),
     );
@@ -440,9 +631,9 @@ class _FinanceCard extends StatelessWidget {
               children: [
                 Text(
                   'TSh ${NumberFormat.compact().format(value)}', 
-                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: compact ? 16 : 20, letterSpacing: -0.5)
+                  style: AppTextStyles.semiBold.copyWith(fontSize: compact ? 16 : 20, letterSpacing: -0.5)
                 ),
-                Text(label, style: const TextStyle(color: Colors.grey, fontSize: 9, fontWeight: FontWeight.w800, letterSpacing: 0.2)),
+                Text(label, style: AppTextStyles.semiBold.copyWith(color: Colors.grey, fontSize: 9, letterSpacing: 0.2)),
               ],
             ),
           ),
@@ -469,7 +660,6 @@ class _AnalyticsHistogramPainter extends CustomPainter {
     final barW = (chartW / count) * 0.45;
     final space = (chartW / count) * 0.55;
 
-    // Grid
     final gPaint = Paint()..color = (isDark ? Colors.white : Colors.black).withOpacity(0.04)..strokeWidth = 1;
     for (int i = 0; i <= 4; i++) {
       final y = chartH - (chartH / 4) * i;
@@ -482,15 +672,12 @@ class _AnalyticsHistogramPainter extends CustomPainter {
       final normV = (data[i].value / maxVal) * progress;
       final y = chartH - (chartH * normV);
 
-      // Bars
       final barRect = RRect.fromRectAndRadius(Rect.fromLTWH(x - barW / 2, y, barW, chartH - y), const Radius.circular(6));
       final barGrad = ui.Gradient.linear(Offset(x, y), Offset(x, chartH), [color.withOpacity(0.7), color.withOpacity(0.2)]);
       canvas.drawRRect(barRect, Paint()..shader = barGrad);
       
-      // Top Cap Blur
       canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromLTWH(x - barW / 2, y, barW, 4), const Radius.circular(6)), Paint()..color = color.withOpacity(0.4)..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
 
-      // Path for Progress Line
       if (i == 0) path.moveTo(x, y);
       else {
         final prevX = (space / 2) + (i - 1) * (barW + space) + barW / 2;
@@ -498,19 +685,15 @@ class _AnalyticsHistogramPainter extends CustomPainter {
         path.cubicTo(prevX + (x - prevX) / 2, prevY, prevX + (x - prevX) / 2, y, x, y);
       }
 
-      // Label
       if (data[i].label.isNotEmpty) {
-        final tp = TextPainter(text: TextSpan(text: data[i].label, style: const TextStyle(color: Colors.grey, fontSize: 8, fontWeight: FontWeight.w900)), textDirection: ui.TextDirection.ltr)..layout();
+        final tp = TextPainter(text: TextSpan(text: data[i].label, style: AppTextStyles.semiBold.copyWith(color: Colors.grey, fontSize: 8)), textDirection: ui.TextDirection.ltr)..layout();
         tp.paint(canvas, Offset(x - tp.width / 2, chartH + 12));
       }
     }
 
-    // Line Glow
     canvas.drawPath(path, Paint()..color = color.withOpacity(0.3)..style = PaintingStyle.stroke..strokeWidth = 6..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
-    // Main Line
     canvas.drawPath(path, Paint()..color = color..style = PaintingStyle.stroke..strokeWidth = 2.5..strokeCap = StrokeCap.round);
 
-    // Points
     for (int i = 0; i < count; i++) {
       final x = (space / 2) + i * (barW + space) + barW / 2;
       final y = chartH - (chartH * (data[i].value / maxVal) * progress);

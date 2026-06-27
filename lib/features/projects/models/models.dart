@@ -1,1 +1,12 @@
-export 'project_model.dart';
+export 'common/project_enums.dart';
+export 'common/model_utils.dart';
+export 'common/attachment.dart';
+export 'entities/project.dart';
+export 'entities/project_member.dart';
+export 'tasks/phase.dart';
+export 'tasks/task.dart';
+export 'tasks/subtask.dart';
+export 'finance/payment.dart';
+export 'finance/expense.dart';
+export 'support/client.dart';
+export 'support/app_notification.dart';

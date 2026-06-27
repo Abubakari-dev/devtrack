@@ -41,15 +41,15 @@ class NotificationCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
               color: notification.isRead 
-                ? (isDark ? const Color(0xFF30363D) : AppColors.borderLight.withOpacity(0.5))
-                : notification.color.withOpacity(0.3),
+                ? (isDark ? const Color(0xFF30363D) : AppColors.borderLight.withValues(alpha: 0.5))
+                : notification.color.withValues(alpha: 0.3),
               width: notification.isRead ? 1 : 2,
             ),
             boxShadow: isDark ? [] : [
               BoxShadow(
                 color: notification.isRead 
-                  ? Colors.black.withOpacity(0.02)
-                  : notification.color.withOpacity(0.08),
+                  ? Colors.black.withValues(alpha: 0.02)
+                  : notification.color.withValues(alpha: 0.08),
                 blurRadius: notification.isRead ? 8 : 12,
                 offset: const Offset(0, 4),
               ),
@@ -61,10 +61,10 @@ class NotificationCard extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: notification.color.withOpacity(0.1),
+                  color: notification.color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: notification.color.withOpacity(0.2),
+                    color: notification.color.withValues(alpha: 0.2),
                     width: 1,
                   ),
                 ),
@@ -106,7 +106,7 @@ class NotificationCard extends StatelessWidget {
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: notification.color.withOpacity(0.4),
+                                  color: notification.color.withValues(alpha: 0.4),
                                   blurRadius: 6,
                                   offset: const Offset(0, 2),
                                 ),

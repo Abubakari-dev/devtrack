@@ -41,7 +41,7 @@ class ActivityLog {
 }
 
 class ActivityLogRepository {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  FirebaseFirestore get _db => FirebaseFirestore.instance;
   final AuthService _authService = AuthService();
 
   String? get _uid => _authService.currentUser?.uid;
@@ -50,7 +50,7 @@ class ActivityLogRepository {
       _db.collection('users').doc(_uid).collection('activityLogs');
 
   // ── LOG ACTIVITY ────────────────────────────────────────────────────────────
-  Future<void> logActivity(String projectId, String action) async {
+  Future<void> logActivity(String projectId, String action, {String? userName}) async {
     if (_uid == null) throw Exception('User not authenticated');
 
     await _activityLogsCollection.add({
@@ -58,6 +58,7 @@ class ActivityLogRepository {
       'action': action,
       'timestamp': FieldValue.serverTimestamp(),
       'userId': _uid,
+      'userName': userName,
     });
   }
 

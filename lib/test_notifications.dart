@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'core/services/enhanced_notification_service.dart';
+import 'package:devtrack/core/services/notification_service.dart';
 
 /// Test screen to try out different notification sounds
 class TestNotificationsScreen extends StatelessWidget {
@@ -15,144 +15,185 @@ class TestNotificationsScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text(
-            '🔔 Test Notification Sounds',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Tap any button to test notification sounds. Make sure your device is not in silent mode!',
-            style: TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 24),
-          
-          _buildTestButton(
+          _buildTestCategory(
             context,
-            icon: '🚨',
-            title: 'Critical Alert',
-            subtitle: 'Payment Overdue',
-            color: Colors.red,
-            onTap: () => EnhancedNotificationService.instance.notifyPaymentOverdue(
-              projectName: 'Test Project',
-              amount: 5000,
-              daysOverdue: 5,
-            ),
+            'Critical Alerts',
+            [
+              _buildTestItem(
+                context,
+                icon: '🚨',
+                title: 'Critical Alert',
+                subtitle: 'Payment Overdue',
+                color: Colors.red,
+                onTap: () => AppNotificationService.instance.notifyPaymentOverdue(
+                  projectName: 'Test Project',
+                  amount: 5000,
+                  daysOverdue: 5,
+                ),
+              ),
+            ],
           ),
-          
-          _buildTestButton(
+          _buildTestCategory(
             context,
-            icon: '💰',
-            title: 'Payment Alert',
-            subtitle: 'Payment Due',
-            color: Colors.orange,
-            onTap: () => EnhancedNotificationService.instance.notifyPaymentDue(
-              projectName: 'Test Project',
-              amount: 5000,
-              dueDate: DateTime.now().add(const Duration(days: 3)),
-            ),
+            'Payment Notifications',
+            [
+              _buildTestItem(
+                context,
+                icon: '💰',
+                title: 'Payment Due',
+                subtitle: 'Upcoming Payment',
+                color: Colors.green,
+                onTap: () => AppNotificationService.instance.notifyPaymentDue(
+                  projectName: 'Test Project',
+                  amount: 2500,
+                  dueDate: DateTime.now().add(const Duration(days: 2)),
+                ),
+              ),
+            ],
           ),
-          
-          _buildTestButton(
+          _buildTestCategory(
             context,
-            icon: '📋',
-            title: 'Project Alert',
-            subtitle: 'Deadline Approaching',
-            color: Colors.amber,
-            onTap: () => EnhancedNotificationService.instance.notifyProjectDeadline(
-              projectName: 'Test Project',
-              deadline: DateTime.now().add(const Duration(days: 3)),
-              daysRemaining: 3,
-            ),
+            'Project Notifications',
+            [
+              _buildTestItem(
+                context,
+                icon: '⏰',
+                title: 'Project Deadline',
+                subtitle: 'Approaching Deadline',
+                color: Colors.orange,
+                onTap: () => AppNotificationService.instance.notifyProjectDeadline(
+                  projectName: 'Test Project',
+                  deadline: DateTime.now().add(const Duration(days: 3)),
+                  daysRemaining: 3,
+                ),
+              ),
+            ],
           ),
-          
-          _buildTestButton(
+          _buildTestCategory(
             context,
-            icon: '⏰',
-            title: 'Task Reminder',
-            subtitle: 'Don\'t forget!',
-            color: Colors.blue,
-            onTap: () => EnhancedNotificationService.instance.notifyTaskReminder(
-              taskName: 'Complete documentation',
-              projectName: 'Test Project',
-            ),
+            'Task Reminders',
+            [
+              _buildTestItem(
+                context,
+                icon: '📋',
+                title: 'Task Reminder',
+                subtitle: 'Standard Reminder',
+                color: Colors.blue,
+                onTap: () => AppNotificationService.instance.notifyTaskReminder(
+                  taskName: 'Submit Design',
+                  projectName: 'Test Project',
+                ),
+              ),
+            ],
           ),
-          
-          _buildTestButton(
+          _buildTestCategory(
             context,
-            icon: '✅',
-            title: 'Success',
-            subtitle: 'Project Completed',
-            color: Colors.green,
-            onTap: () => EnhancedNotificationService.instance.notifyProjectCompleted(
-              projectName: 'Test Project',
-            ),
+            'Success Notifications',
+            [
+              _buildTestItem(
+                context,
+                icon: '🎉',
+                title: 'Project Completed',
+                subtitle: 'Completion Celebration',
+                color: Colors.purple,
+                onTap: () => AppNotificationService.instance.notifyProjectCompleted(
+                  projectName: 'Test Project',
+                ),
+              ),
+            ],
           ),
-          
-          _buildTestButton(
+          _buildTestCategory(
             context,
-            icon: '💸',
-            title: 'Finance Alert',
-            subtitle: 'Budget Warning',
-            color: Colors.teal,
-            onTap: () => EnhancedNotificationService.instance.notifyBudgetWarning(
-              projectName: 'Test Project',
-              budget: 10000,
-              spent: 8500,
-              percentUsed: 85,
-            ),
+            'Finance Alerts',
+            [
+              _buildTestItem(
+                context,
+                icon: '⚠️',
+                title: 'Budget Warning',
+                subtitle: 'Budget Threshold Reached',
+                color: Colors.amber,
+                onTap: () => AppNotificationService.instance.notifyBudgetWarning(
+                  projectName: 'Test Project',
+                  budget: 10000,
+                  spent: 8500,
+                  percentUsed: 85,
+                ),
+              ),
+            ],
           ),
-          
-          _buildTestButton(
+          _buildTestCategory(
             context,
-            icon: '📊',
-            title: 'Daily Summary',
-            subtitle: 'Your daily report',
-            color: Colors.purple,
-            onTap: () => EnhancedNotificationService.instance.notifyDailySummary(
-              activeProjects: 5,
-              tasksCompleted: 12,
-              upcomingDeadlines: 3,
-            ),
+            'Summaries',
+            [
+              _buildTestItem(
+                context,
+                icon: '📊',
+                title: 'Daily Summary',
+                subtitle: 'Daily Update',
+                color: Colors.teal,
+                onTap: () => AppNotificationService.instance.notifyDailySummary(
+                  activeProjects: 3,
+                  tasksCompleted: 5,
+                  upcomingDeadlines: 1,
+                ),
+              ),
+            ],
           ),
-          
-          _buildTestButton(
+          _buildTestCategory(
             context,
-            icon: '🚀',
-            title: 'Project Start',
-            subtitle: 'Time to begin!',
-            color: Colors.indigo,
-            onTap: () => EnhancedNotificationService.instance.notifyProjectStart(
-              projectName: 'Test Project',
-            ),
+            'Project Start',
+            [
+              _buildTestItem(
+                context,
+                icon: '🚀',
+                title: 'Project Start',
+                subtitle: 'Starting Today',
+                color: Colors.indigo,
+                onTap: () => AppNotificationService.instance.notifyProjectStart(
+                  projectName: 'New Launch',
+                ),
+              ),
+            ],
           ),
-          
-          const SizedBox(height: 24),
-          const Divider(),
-          const SizedBox(height: 16),
-          
-          ElevatedButton.icon(
+          const SizedBox(height: 20),
+          ElevatedButton(
             onPressed: () async {
-              await EnhancedNotificationService.instance.cancelAllNotifications();
+              await AppNotificationService.instance.cancelAllNotifications();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('All notifications cleared!')),
+                  const SnackBar(content: Text('All notifications cancelled')),
                 );
               }
             },
-            icon: const Icon(Icons.clear_all),
-            label: const Text('Clear All Notifications'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.all(16),
+              backgroundColor: Colors.red.shade100,
+              foregroundColor: Colors.red.shade900,
             ),
+            child: const Text('Cancel All Notifications'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildTestButton(
+  Widget _buildTestCategory(BuildContext context, String title, List<Widget> items) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            title,
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
+        ),
+        ...items,
+        const Divider(),
+      ],
+    );
+  }
+
+  Widget _buildTestItem(
     BuildContext context, {
     required String icon,
     required String title,
@@ -160,37 +201,19 @@ class TestNotificationsScreen extends StatelessWidget {
     required Color color,
     required VoidCallback onTap,
   }) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      child: ListTile(
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Center(
-            child: Text(icon, style: const TextStyle(fontSize: 24)),
-          ),
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          shape: BoxShape.circle,
         ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text(subtitle),
-        trailing: Icon(Icons.notifications_active, color: color),
-        onTap: () {
-          onTap();
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('$title notification sent!'),
-              duration: const Duration(seconds: 2),
-              backgroundColor: color,
-            ),
-          );
-        },
+        child: Text(icon, style: const TextStyle(fontSize: 20)),
       ),
+      title: Text(title),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.play_circle_fill, color: Colors.grey),
+      onTap: onTap,
     );
   }
 }

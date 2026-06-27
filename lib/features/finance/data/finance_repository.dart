@@ -1,10 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../../../core/services/auth_service.dart';
-import '../../projects/models/project_model.dart';
-import '../models/savings_goal_model.dart';
+import '../../../core/services/notification_service.dart';
+import '../../projects/models/models.dart';
 
 class FinanceRepository {
-  final FirebaseFirestore _db = FirebaseFirestore.instance;
+  FirebaseFirestore get _db => FirebaseFirestore.instance;
   final AuthService _authService = AuthService();
 
   String? get _uid => _authService.currentUser?.uid;
@@ -13,8 +14,132 @@ class FinanceRepository {
   // Root collections
   CollectionReference get _paymentsCollection => _db.collection('payments');
   CollectionReference get _expensesCollection => _db.collection('expenses');
-  CollectionReference get _savingsCollection => _db.collection('savings');
-  CollectionReference get _savingsGoalsCollection => _db.collection('savingsGoals');
+  CollectionReference get _budgetsCollection => _db.collection('budgets');
+  CollectionReference get _transactionsCollection => _db.collection('transactions');
+  CollectionReference get _debtsCollection => _db.collection('debts');
+  CollectionReference get _walletsCollection => _db.collection('wallets');
+  CollectionReference get _transfersCollection => _db.collection('transfers');
+
+  // ── WALLET OPERATIONS ───────────────────────────────────────────────────────
+  Future<void> saveWallet(Map<String, dynamic> walletData) async {
+    if (_uid == null) throw Exception('User not authenticated');
+    final id = walletData['id'] ?? _db.collection('wallets').doc().id;
+    await _walletsCollection.doc(id).set({
+      ...walletData,
+      'userId': _uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Stream<List<Map<String, dynamic>>> getWallets() {
+    if (_uid == null) return Stream.value([]);
+    return _walletsCollection
+        .where('userId', isEqualTo: _uid)
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) => {...doc.data() as Map<String, dynamic>, 'id': doc.id}).toList());
+  }
+
+  // ── TRANSFER OPERATIONS ─────────────────────────────────────────────────────
+  Future<void> saveTransfer(Map<String, dynamic> transferData) async {
+    if (_uid == null) throw Exception('User not authenticated');
+    final id = transferData['id'] ?? _db.collection('transfers').doc().id;
+    await _transfersCollection.doc(id).set({
+      ...transferData,
+      'userId': _uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  // ── BUDGET OPERATIONS ───────────────────────────────────────────────────────
+  Future<void> saveBudget(Map<String, dynamic> budgetData) async {
+    if (_uid == null) throw Exception('User not authenticated');
+    final id = budgetData['id'] ?? _db.collection('budgets').doc().id;
+    await _budgetsCollection.doc(id).set({
+      ...budgetData,
+      'userId': _uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Stream<List<Map<String, dynamic>>> getBudgets() {
+    if (_uid == null) return Stream.value([]);
+    return _budgetsCollection
+        .where('userId', isEqualTo: _uid)
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) => {...doc.data() as Map<String, dynamic>, 'id': doc.id}).toList());
+  }
+
+  // ── TRANSACTION OPERATIONS ──────────────────────────────────────────────────
+  Future<void> saveTransaction(Map<String, dynamic> txData) async {
+    if (_uid == null) throw Exception('User not authenticated');
+    final id = txData['id'] ?? _db.collection('transactions').doc().id;
+    await _transactionsCollection.doc(id).set({
+      ...txData,
+      'userId': _uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Stream<List<Map<String, dynamic>>> getTransactions() {
+    if (_uid == null) return Stream.value([]);
+    return _transactionsCollection
+        .where('userId', isEqualTo: _uid)
+        .orderBy('date', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) => {...doc.data() as Map<String, dynamic>, 'id': doc.id}).toList());
+  }
+
+  // ── DEBT OPERATIONS ─────────────────────────────────────────────────────────
+  Future<void> saveDebt(Map<String, dynamic> debtData) async {
+    if (_uid == null) throw Exception('User not authenticated');
+    final id = debtData['id'] ?? _db.collection('debts').doc().id;
+    await _debtsCollection.doc(id).set({
+      ...debtData,
+      'userId': _uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Stream<List<Map<String, dynamic>>> getDebts() {
+    if (_uid == null) return Stream.value([]);
+    return _debtsCollection
+        .where('userId', isEqualTo: _uid)
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) => {...doc.data() as Map<String, dynamic>, 'id': doc.id}).toList());
+  }
+
+  Future<Map<String, dynamic>?> getProjectById(String projectId) async {
+    final doc = await _db.collection('projects').doc(projectId).get();
+    if (doc.exists) {
+      return {...doc.data() as Map<String, dynamic>, 'id': doc.id};
+    }
+    return null;
+  }
+
+  // ── DEBT PAYMENT OPERATIONS ────────────────────────────────────────────────
+  Future<void> saveDebtPayment(Map<String, dynamic> paymentData) async {
+    if (_uid == null) throw Exception('User not authenticated');
+    final id = paymentData['id'] ?? _db.collection('debt_payments').doc().id;
+    await _db.collection('debt_payments').doc(id).set({
+      ...paymentData,
+      'userId': _uid,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<void> deleteDebtPayment(String paymentId) async {
+    if (_uid == null) throw Exception('User not authenticated');
+    await _db.collection('debt_payments').doc(paymentId).delete();
+  }
+
+  Stream<List<Map<String, dynamic>>> getDebtPayments(String debtId) {
+    if (_uid == null) return Stream.value([]);
+    return _db.collection('debt_payments')
+        .where('userId', isEqualTo: _uid)
+        .where('debtId', isEqualTo: debtId)
+        .snapshots()
+        .map((snap) => snap.docs.map((doc) => {...doc.data() as Map<String, dynamic>, 'id': doc.id}).toList());
+  }
 
   // ── PAYMENT OPERATIONS ──────────────────────────────────────────────────────
   Future<void> recordPayment(Payment payment) async {
@@ -27,6 +152,7 @@ class FinanceRepository {
       'amount': payment.amount,
       'date': payment.date.toIso8601String(),
       'isReceived': payment.isReceived,
+      'walletId': payment.walletId,
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
@@ -67,7 +193,8 @@ class FinanceRepository {
           label: data['label'] ?? '',
           amount: (data['amount'] as num?)?.toDouble() ?? 0,
           date: DateTime.parse(data['date'] ?? DateTime.now().toIso8601String()),
-          isReceived: data['isReceived'] ?? false,
+          isReceived: data['isReceived'] ?? true,
+          walletId: data['walletId'],
         );
       }).toList();
     });
@@ -89,7 +216,8 @@ class FinanceRepository {
           label: data['label'] ?? '',
           amount: (data['amount'] as num?)?.toDouble() ?? 0,
           date: DateTime.parse(data['date'] ?? DateTime.now().toIso8601String()),
-          isReceived: data['isReceived'] ?? false,
+          isReceived: data['isReceived'] ?? true,
+          walletId: data['walletId'],
         );
       }).toList();
     });
@@ -101,13 +229,47 @@ class FinanceRepository {
 
     await _expensesCollection.doc(expense.id).set({
       'userId': _uid,
-      'projectId': expense.projectId,
       'name': expense.name,
+      'projectId': expense.projectId,
       'amount': expense.amount,
       'date': expense.date.toIso8601String(),
       'category': expense.category,
       'createdAt': FieldValue.serverTimestamp(),
     });
+
+    // If linked to a project, check budget
+    if (expense.projectId.isNotEmpty) {
+      _checkProjectBudget(expense.projectId);
+    }
+  }
+
+  Future<void> _checkProjectBudget(String projectId) async {
+    try {
+      final projectDoc = await _db.collection('projects').doc(projectId).get();
+      if (!projectDoc.exists) return;
+
+      final data = projectDoc.data()!;
+      final double budget = (data['totalPrice'] as num?)?.toDouble() ?? 0;
+      
+      if (budget <= 0) return;
+
+      final expensesSnap = await _expensesCollection
+          .where('projectId', isEqualTo: projectId)
+          .get();
+      
+      double totalSpent = 0;
+      for (var doc in expensesSnap.docs) {
+        totalSpent += (doc.data() as Map<String, dynamic>)['amount'] ?? 0;
+      }
+
+      await AppNotificationService.instance.checkBudgetStatus(
+        data['name'] ?? 'Project',
+        budget,
+        totalSpent,
+      );
+    } catch (e) {
+      debugPrint('Error checking budget: $e');
+    }
   }
 
   Future<void> updateExpense(Expense expense) async {
@@ -115,7 +277,6 @@ class FinanceRepository {
 
     await _expensesCollection.doc(expense.id).update({
       'userId': _uid,
-      'projectId': expense.projectId,
       'name': expense.name,
       'amount': expense.amount,
       'date': expense.date.toIso8601String(),
@@ -129,27 +290,43 @@ class FinanceRepository {
     await _expensesCollection.doc(expenseId).delete();
   }
 
-  Stream<List<Expense>> getExpensesForProject(String projectId) {
-    if (_uid == null) return Stream.value([]);
+  Future<void> clearAllFinanceData() async {
+    if (_uid == null) throw Exception('User not authenticated');
+    
+    final collections = [
+      _paymentsCollection,
+      _expensesCollection,
+      _budgetsCollection,
+      _transactionsCollection,
+      _debtsCollection,
+      _walletsCollection
+    ];
 
-    return _expensesCollection
+    final batch = _db.batch();
+    
+    for (var collection in collections) {
+      final snapshot = await collection.where('userId', isEqualTo: _uid).get();
+      for (var doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+    }
+
+    await batch.commit();
+  }
+
+  Future<void> deleteProjectPayments(String projectId) async {
+    if (_uid == null) throw Exception('User not authenticated');
+    
+    final payments = await _paymentsCollection
         .where('userId', isEqualTo: _uid)
         .where('projectId', isEqualTo: projectId)
-        .orderBy('date', descending: true)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return Expense(
-          id: doc.id,
-          projectId: data['projectId'] ?? '',
-          name: data['name'] ?? '',
-          amount: (data['amount'] as num?)?.toDouble() ?? 0,
-          date: DateTime.parse(data['date'] ?? DateTime.now().toIso8601String()),
-          category: data['category'] ?? '',
-        );
-      }).toList();
-    });
+        .get();
+        
+    final batch = _db.batch();
+    for (var doc in payments.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
   }
 
   Stream<List<Expense>> getAllExpenses() {
@@ -164,7 +341,7 @@ class FinanceRepository {
         final data = doc.data() as Map<String, dynamic>;
         return Expense(
           id: doc.id,
-          projectId: data['projectId'] ?? '',
+          projectId: '', // No longer linked to project
           name: data['name'] ?? '',
           amount: (data['amount'] as num?)?.toDouble() ?? 0,
           date: DateTime.parse(data['date'] ?? DateTime.now().toIso8601String()),
@@ -172,110 +349,5 @@ class FinanceRepository {
         );
       }).toList();
     });
-  }
-
-  // ── SAVINGS OPERATIONS ──────────────────────────────────────────────────────
-  Future<void> recordSavings(SavingsRecord savings) async {
-    if (_uid == null) throw Exception('User not authenticated');
-
-    await _savingsCollection.doc(savings.id).set({
-      'userId': _uid,
-      'projectId': savings.projectId,
-      'amount': savings.amount,
-      'date': savings.date.toIso8601String(),
-      'accountName': savings.accountName,
-      'notes': savings.notes,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> updateSavings(SavingsRecord savings) async {
-    if (_uid == null) throw Exception('User not authenticated');
-
-    await _savingsCollection.doc(savings.id).update({
-      'userId': _uid,
-      'projectId': savings.projectId,
-      'amount': savings.amount,
-      'date': savings.date.toIso8601String(),
-      'accountName': savings.accountName,
-      'notes': savings.notes,
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> deleteSavings(String savingsId) async {
-    if (_uid == null) throw Exception('User not authenticated');
-    await _savingsCollection.doc(savingsId).delete();
-  }
-
-  Stream<List<SavingsRecord>> getSavingsForProject(String projectId) {
-    if (_uid == null) return Stream.value([]);
-
-    return _savingsCollection
-        .where('userId', isEqualTo: _uid)
-        .where('projectId', isEqualTo: projectId)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return SavingsRecord.fromMap({...data, 'id': doc.id});
-      }).toList()..sort((a, b) => b.date.compareTo(a.date));
-    });
-  }
-
-  Stream<List<SavingsRecord>> getAllSavings() {
-    if (_uid == null) return Stream.value([]);
-
-    // Using Filter.or to handle both correct key 'userId' and typo 'serId'
-    // This satisfies security rules while avoiding naked queries.
-    return _savingsCollection
-        .where(Filter.or(
-          Filter('userId', isEqualTo: _uid),
-          Filter('serId', isEqualTo: _uid),
-        ))
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        return SavingsRecord.fromMap({...data, 'id': doc.id});
-      }).toList()..sort((a, b) => b.date.compareTo(a.date));
-    });
-  }
-
-  // ── SAVINGS GOAL OPERATIONS ─────────────────────────────────────────────────
-  Future<void> setSavingsGoal(SavingsGoal goal) async {
-    if (_uid == null) throw Exception('User not authenticated');
-
-    await _savingsGoalsCollection.doc(_uid).set({
-      'id': _uid,
-      'userId': _uid,
-      'monthlyGoal': goal.monthlyGoal,
-      'semiAnnualGoal': goal.semiAnnualGoal,
-      'annualGoal': goal.annualGoal,
-      'createdAt': goal.createdAt.toIso8601String(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Stream<SavingsGoal?> getSavingsGoal() {
-    if (_uid == null) return Stream.value(null);
-
-    return _savingsGoalsCollection
-        .doc(_uid)
-        .snapshots()
-        .map((snapshot) {
-      if (!snapshot.exists) return null;
-      final data = snapshot.data() as Map<String, dynamic>;
-      return SavingsGoal.fromMap(data);
-    });
-  }
-
-  Future<SavingsGoal?> getSavingsGoalOnce() async {
-    if (_uid == null) return null;
-
-    final doc = await _savingsGoalsCollection.doc(_uid).get();
-    if (!doc.exists) return null;
-    final data = doc.data() as Map<String, dynamic>;
-    return SavingsGoal.fromMap(data);
   }
 }

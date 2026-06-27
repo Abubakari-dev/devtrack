@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
-import '../../../core/routes/app_router.dart';
+import 'package:go_router/go_router.dart';
 import '../../../core/services/auth_service.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/theme/app_text_styles.dart';
+
+import '../../../core/localization/app_localizations.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -16,11 +17,13 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
 
   final _nameFocus = FocusNode();
   final _emailFocus = FocusNode();
+  final _phoneFocus = FocusNode();
   final _passwordFocus = FocusNode();
   final _confirmFocus = FocusNode();
 
@@ -50,10 +53,12 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
   void dispose() {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
+    _phoneCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
     _nameFocus.dispose();
     _emailFocus.dispose();
+    _phoneFocus.dispose();
     _passwordFocus.dispose();
     _confirmFocus.dispose();
     _animationController.dispose();
@@ -68,35 +73,34 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
 
     final name = _nameCtrl.text.trim();
     final email = _emailCtrl.text.trim().toLowerCase();
+    final phone = _phoneCtrl.text.trim();
     final password = _passwordCtrl.text;
 
     try {
-      // Create user account and profile via AuthService (passes name!)
       await _authService.signUp(
         email: email,
         password: password,
         name: name,
+        phoneNumber: phone,
       );
       
-      // Wait for Firestore to complete
       await Future.delayed(const Duration(milliseconds: 800));
       
-      // Verify user is authenticated
       if (_authService.currentUser == null) {
         throw Exception('Account creation failed. Please try again.');
       }
 
       if (mounted) {
-        _showSnackBar('🎉 Account created successfully!', AppColors.green);
+        _showSnackBar(context.tr('account_created_success'), AppColors.emerald);
         await Future.delayed(const Duration(milliseconds: 500));
         if (mounted) {
-          Navigator.of(context).pushReplacementNamed(AppRoutes.home);
+          context.go('/');
         }
       }
     } catch (e) {
       if (mounted) {
         final errorMessage = _parseErrorMessage(e.toString());
-        _showSnackBar(errorMessage, AppColors.red);
+        _showSnackBar(errorMessage, AppColors.rose);
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -105,60 +109,21 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
 
   String _parseErrorMessage(String error) {
     if (error.contains('email-already-in-use')) {
-      return 'This email is already registered. Try signing in instead';
+      return context.tr('email_already_registered');
     } else if (error.contains('invalid-email')) {
-      return 'Please enter a valid email address';
+      return context.tr('invalid_email_error');
     } else if (error.contains('weak-password')) {
-      return 'Password is too weak. Use at least 6 characters';
-    } else if (error.contains('operation-not-allowed')) {
-      return 'Email/password sign-up is not enabled';
+      return context.tr('weak_password_error');
     } else if (error.contains('network-request-failed')) {
-      return 'Network error. Check your internet connection';
-    } else if (error.contains('too-many-requests')) {
-      return 'Too many attempts. Please try again later';
+      return context.tr('network_error');
     }
-    
-    return error
-        .replaceAll(RegExp(r'\[.*?\]'), '')
-        .replaceAll('Exception:', '')
-        .trim();
-  }
-
-  String? _validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Email is required';
-    }
-    final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(value)) {
-      return 'Enter a valid email address';
-    }
-    return null;
-  }
-
-  String? _validatePassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Password is required';
-    }
-    if (value.length < 6) {
-      return 'Password must be at least 6 characters';
-    }
-    return null;
-  }
-
-  String? _validateConfirmPassword(String? value) {
-    if (value == null || value.isEmpty) {
-      return 'Please confirm your password';
-    }
-    if (value != _passwordCtrl.text) {
-      return 'Passwords do not match';
-    }
-    return null;
+    return error.replaceAll(RegExp(r'\[.*?\]'), '').replaceAll('Exception:', '').trim();
   }
 
   void _showSnackBar(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(message, style: const TextStyle(fontWeight: FontWeight.bold)),
+        content: Text(message, style: AppTextStyles.semiBold),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -172,24 +137,16 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
       backgroundColor: AppColors.bg,
       body: Stack(
         children: [
-          // Background gradient glows
           Positioned(
             top: -120,
             left: -60,
-            child: _CircularGlow(
-              color: AppColors.indigo.withValues(alpha: 0.12),
-              size: 350,
-            ),
+            child: _CircularGlow(color: AppColors.indigo.withValues(alpha: 0.1), size: 350),
           ),
           Positioned(
             bottom: -80,
             right: -60,
-            child: _CircularGlow(
-              color: AppColors.blue.withValues(alpha: 0.1),
-              size: 300,
-            ),
+            child: _CircularGlow(color: AppColors.blue.withValues(alpha: 0.08), size: 300),
           ),
-
           SafeArea(
             child: FadeTransition(
               opacity: _fadeAnimation,
@@ -202,7 +159,6 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.center,
                       children: [
-                        // Hero Icon
                         Hero(
                           tag: 'auth_icon',
                           child: Container(
@@ -212,107 +168,96 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
                               shape: BoxShape.circle,
                               boxShadow: [
                                 BoxShadow(
-                                  color: AppColors.indigo.withValues(alpha: 0.2),
+                                  color: AppColors.indigo.withValues(alpha: 0.15),
                                   blurRadius: 40,
                                   offset: const Offset(0, 15),
                                 ),
                               ],
                             ),
-                            child: const Icon(
-                              Icons.rocket_launch_rounded,
-                              size: 56,
-                              color: AppColors.indigo,
-                            ),
+                            child: const Icon(Icons.rocket_launch_rounded, size: 56, color: AppColors.indigo),
                           ),
                         ),
                         const SizedBox(height: 48),
-
-                        // Title
-                        Text(
-                          'Get Started',
-                          style: GoogleFonts.poppins(
-                            fontSize: 34,
-                            fontWeight: FontWeight.w900,
-                            color: Colors.black,
-                            letterSpacing: -1,
-                          ),
-                        ),
+                        Text(context.tr('get_started'), style: AppTextStyles.h1),
                         const SizedBox(height: 8),
                         Text(
-                          'Create your account to start managing projects',
+                          context.tr('create_account_desc'),
                           textAlign: TextAlign.center,
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            color: AppColors.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: AppTextStyles.medium.copyWith(fontSize: 16, color: AppColors.textSecondary),
                         ),
                         const SizedBox(height: 56),
-
-                        // Full Name Field
-                        _buildInputLabel('FULL NAME'),
+                        _buildInputLabel(context.tr('full_name_label')),
                         _ModernTextField(
                           controller: _nameCtrl,
                           focusNode: _nameFocus,
-                          hint: 'e.g. John Doe',
+                          hint: context.tr('name_hint'),
                           icon: Icons.person_outline_rounded,
                           textInputAction: TextInputAction.next,
                           textCapitalization: TextCapitalization.words,
-                          validator: (v) => v == null || v.trim().isEmpty
-                              ? 'Please enter your name'
-                              : null,
+                          validator: (v) => v == null || v.trim().isEmpty ? context.tr('name_required') : null,
                           onFieldSubmitted: (_) => _emailFocus.requestFocus(),
                         ),
                         const SizedBox(height: 24),
-
-                        // Email Field
-                        _buildInputLabel('EMAIL ADDRESS'),
+                        _buildInputLabel(context.tr('email_label')),
                         _ModernTextField(
                           controller: _emailCtrl,
                           focusNode: _emailFocus,
-                          hint: 'name@example.com',
+                          hint: context.tr('email_hint'),
                           icon: Icons.alternate_email_rounded,
                           keyboardType: TextInputType.emailAddress,
                           textInputAction: TextInputAction.next,
-                          validator: _validateEmail,
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return context.tr('email_required');
+                            if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(v)) return context.tr('valid_email_required');
+                            return null;
+                          },
+                          onFieldSubmitted: (_) => _phoneFocus.requestFocus(),
+                        ),
+                        const SizedBox(height: 24),
+                        _buildInputLabel(context.tr('phone_label')),
+                        _ModernTextField(
+                          controller: _phoneCtrl,
+                          focusNode: _phoneFocus,
+                          hint: context.tr('phone_number_hint'),
+                          icon: Icons.phone_outlined,
+                          keyboardType: TextInputType.phone,
+                          textInputAction: TextInputAction.next,
+                          validator: (v) {
+                            if (v == null || v.isEmpty) return context.tr('phone_required');
+                            if (!RegExp(r'^\d{10}$').hasMatch(v)) return context.tr('invalid_phone_error');
+                            return null;
+                          },
                           onFieldSubmitted: (_) => _passwordFocus.requestFocus(),
                         ),
                         const SizedBox(height: 24),
-
-                        // Password Field
-                        _buildInputLabel('PASSWORD'),
+                        _buildInputLabel(context.tr('password_label')),
                         _ModernTextField(
                           controller: _passwordCtrl,
                           focusNode: _passwordFocus,
-                          hint: 'Min. 6 characters',
+                          hint: context.tr('password_hint'),
                           icon: Icons.lock_outline_rounded,
                           isPassword: true,
                           obscure: _obscurePass,
                           onToggleObscure: () => setState(() => _obscurePass = !_obscurePass),
                           textInputAction: TextInputAction.next,
-                          validator: _validatePassword,
+                          validator: (v) => v == null || v.length < 6 ? context.tr('password_min_length') : null,
                           onFieldSubmitted: (_) => _confirmFocus.requestFocus(),
                         ),
                         const SizedBox(height: 24),
-
-                        // Confirm Password Field
-                        _buildInputLabel('CONFIRM PASSWORD'),
+                        _buildInputLabel(context.tr('confirm_password_label')),
                         _ModernTextField(
                           controller: _confirmCtrl,
                           focusNode: _confirmFocus,
-                          hint: 'Repeat password',
+                          hint: context.tr('confirm_password_hint'),
                           icon: Icons.verified_user_outlined,
                           isPassword: true,
                           obscure: _obscureConfirm,
                           onToggleObscure: () => setState(() => _obscureConfirm = !_obscureConfirm),
                           textInputAction: TextInputAction.done,
-                          validator: _validateConfirmPassword,
+                          validator: (v) => v != _passwordCtrl.text ? context.tr('passwords_not_match') : null,
                           onFieldSubmitted: (_) => _signup(),
                         ),
-
                         const SizedBox(height: 48),
-
-                        // Create Account Button
                         SizedBox(
                           width: double.infinity,
                           height: 64,
@@ -321,64 +266,34 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
                             style: ElevatedButton.styleFrom(
                               backgroundColor: AppColors.indigo,
                               foregroundColor: Colors.white,
-                              elevation: 8,
-                              shadowColor: AppColors.indigo.withValues(alpha: 0.4),
-                              disabledBackgroundColor: AppColors.indigo.withValues(alpha: 0.6),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(24),
-                              ),
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                             ),
                             child: _loading
-                                ? const SizedBox(
-                                    height: 24,
-                                    width: 24,
-                                    child: CircularProgressIndicator(
-                                      color: Colors.white,
-                                      strokeWidth: 3,
-                                    ),
-                                  )
+                                ? const SizedBox(height: 24, width: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
                                 : Row(
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
-                                      Text(
-                                        'CREATE ACCOUNT',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.w900,
-                                          letterSpacing: 1,
-                                        ),
-                                      ),
+                                      Text(context.tr('create_account'), style: AppTextStyles.semiBold.copyWith(fontSize: 16, letterSpacing: 1)),
                                       const SizedBox(width: 12),
                                       const Icon(Icons.arrow_forward_rounded, size: 20),
                                     ],
                                   ),
                           ),
                         ),
-
                         const SizedBox(height: 40),
-
-                        // Sign In Link
                         GestureDetector(
                           onTap: _loading ? null : () => Navigator.pop(context),
-                          child: MouseRegion(
-                            cursor: SystemMouseCursors.click,
-                            child: RichText(
-                              text: TextSpan(
-                                style: GoogleFonts.poppins(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 15,
+                          child: RichText(
+                            text: TextSpan(
+                              style: AppTextStyles.regular.copyWith(color: AppColors.textSecondary, fontSize: 15),
+                              children: [
+                                TextSpan(text: context.tr('already_member')),
+                                TextSpan(
+                                  text: context.tr('sign_in'),
+                                  style: AppTextStyles.semiBold.copyWith(color: AppColors.indigo),
                                 ),
-                                children: [
-                                  const TextSpan(text: 'Already a member? '),
-                                  TextSpan(
-                                    text: 'Sign In',
-                                    style: const TextStyle(
-                                      color: AppColors.indigo,
-                                      fontWeight: FontWeight.w900,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                              ],
                             ),
                           ),
                         ),
@@ -401,12 +316,7 @@ class _SignupScreenState extends State<SignupScreen> with SingleTickerProviderSt
         padding: const EdgeInsets.only(left: 4, bottom: 8),
         child: Text(
           label,
-          style: GoogleFonts.poppins(
-            fontSize: 11,
-            fontWeight: FontWeight.w800,
-            color: Colors.black.withValues(alpha: 0.6),
-            letterSpacing: 1.2,
-          ),
+          style: AppTextStyles.labelSmall.copyWith(fontSize: 11, letterSpacing: 1.2),
         ),
       ),
     );
@@ -460,92 +370,42 @@ class _ModernTextFieldState extends State<_ModernTextField> {
   @override
   void dispose() {
     _localFocusNode.removeListener(_onFocusChange);
-    if (widget.focusNode == null) {
-      _localFocusNode.dispose();
-    }
+    if (widget.focusNode == null) _localFocusNode.dispose();
     super.dispose();
   }
 
-  void _onFocusChange() {
-    setState(() {
-      _isFocused = _localFocusNode.hasFocus;
-    });
-  }
+  void _onFocusChange() => setState(() => _isFocused = _localFocusNode.hasFocus);
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      child: TextFormField(
-        controller: widget.controller,
-        focusNode: _localFocusNode,
-        obscureText: widget.obscure,
-        keyboardType: widget.keyboardType,
-        textInputAction: widget.textInputAction,
-        textCapitalization: widget.textCapitalization,
-        validator: widget.validator,
-        onFieldSubmitted: widget.onFieldSubmitted,
-        style: GoogleFonts.poppins(
-          fontSize: 15,
-          fontWeight: FontWeight.w600,
-          color: _isFocused ? AppColors.indigo : Colors.black,
-        ),
-        decoration: InputDecoration(
-          hintText: widget.hint,
-          hintStyle: GoogleFonts.poppins(
-            color: AppColors.textMuted,
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-          ),
-          prefixIcon: Icon(
-            widget.icon,
-            color: _isFocused ? AppColors.indigo : Colors.black54,
-            size: 22,
-          ),
-          suffixIcon: widget.isPassword
-              ? IconButton(
-                  onPressed: widget.onToggleObscure,
-                  icon: Icon(
-                    widget.obscure
-                        ? Icons.visibility_off_outlined
-                        : Icons.visibility_outlined,
-                    color: _isFocused ? AppColors.indigo : Colors.black54,
-                    size: 20,
-                  ),
-                  tooltip: widget.obscure ? 'Show password' : 'Hide password',
-                )
-              : null,
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 24,
-            vertical: 22,
-          ),
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-            borderSide: const BorderSide(color: Colors.black, width: 2.0),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-            borderSide: const BorderSide(color: Colors.black, width: 2.0),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-            borderSide: const BorderSide(color: AppColors.indigo, width: 2.5),
-          ),
-          errorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-            borderSide: const BorderSide(color: Colors.redAccent, width: 2.0),
-          ),
-          focusedErrorBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(24),
-            borderSide: const BorderSide(color: Colors.redAccent, width: 2.5),
-          ),
-          errorStyle: GoogleFonts.poppins(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
+    return TextFormField(
+      controller: widget.controller,
+      focusNode: _localFocusNode,
+      obscureText: widget.obscure,
+      keyboardType: widget.keyboardType,
+      textInputAction: widget.textInputAction,
+      textCapitalization: widget.textCapitalization,
+      validator: widget.validator,
+      onFieldSubmitted: widget.onFieldSubmitted,
+      style: AppTextStyles.semiBold.copyWith(fontSize: 15, color: _isFocused ? AppColors.indigo : AppColors.textPrimary),
+      decoration: InputDecoration(
+        hintText: widget.hint,
+        hintStyle: AppTextStyles.regular.copyWith(color: AppColors.textMuted, fontSize: 14),
+        prefixIcon: Icon(widget.icon, color: _isFocused ? AppColors.indigo : AppColors.textSecondary, size: 22),
+        suffixIcon: widget.isPassword
+            ? IconButton(
+                onPressed: widget.onToggleObscure,
+                icon: Icon(widget.obscure ? Icons.visibility_off_outlined : Icons.visibility_outlined, 
+                  color: _isFocused ? AppColors.indigo : AppColors.textSecondary, size: 20),
+              )
+            : null,
+        filled: true,
+        fillColor: Colors.white,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border, width: 1.5)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: BorderSide(color: AppColors.border, width: 1.5)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(20), borderSide: const BorderSide(color: AppColors.indigo, width: 2.0)),
+        errorStyle: AppTextStyles.medium.copyWith(fontSize: 12),
       ),
     );
   }
@@ -554,27 +414,10 @@ class _ModernTextFieldState extends State<_ModernTextField> {
 class _CircularGlow extends StatelessWidget {
   final Color color;
   final double size;
-
-  const _CircularGlow({
-    required this.color,
-    required this.size,
-  });
-
+  const _CircularGlow({required this.color, required this.size});
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: color,
-            blurRadius: 100,
-            spreadRadius: 50,
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+    width: size, height: size,
+    decoration: BoxDecoration(shape: BoxShape.circle, boxShadow: [BoxShadow(color: color, blurRadius: 100, spreadRadius: 50)]),
+  );
 }

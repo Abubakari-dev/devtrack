@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
-import '../../features/projects/models/project_model.dart';
+import '../../features/projects/models/models.dart';
+import '../../features/projects/models/common/model_utils.dart';
 
 class ProjectService {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -123,11 +124,12 @@ class ProjectService {
         orElse: () => TaskPriority.medium
       ),
       phases: phases,
-      createdAt: data['createdAt'] != null 
-        ? DateTime.parse(data['createdAt']) 
-        : (data['updatedAt'] != null 
-            ? (data['updatedAt'] as Timestamp).toDate() 
-            : DateTime.now()),
+      createdAt: ModelUtils.toDateTime(data['createdAt']),
+      updatedAt: data['updatedAt'] != null 
+          ? (data['updatedAt'] is Timestamp 
+              ? (data['updatedAt'] as Timestamp).toDate() 
+              : ModelUtils.toDateTime(data['updatedAt']))
+          : null,
     );
   }
 }
